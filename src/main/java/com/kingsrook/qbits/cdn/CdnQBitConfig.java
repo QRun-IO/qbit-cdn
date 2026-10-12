@@ -20,7 +20,9 @@ package com.kingsrook.qbits.cdn;
 import java.util.ArrayList;
 import java.util.List;
 import com.kingsrook.qqq.backend.core.model.metadata.QInstance;
+import com.kingsrook.qqq.backend.core.model.metadata.producers.MetaDataCustomizerInterface;
 import com.kingsrook.qqq.backend.core.model.metadata.qbits.QBitConfig;
+import com.kingsrook.qqq.backend.core.model.metadata.tables.QTableMetaData;
 import com.kingsrook.qqq.backend.core.utils.StringUtils;
 
 
@@ -38,6 +40,8 @@ public class CdnQBitConfig implements QBitConfig
    private int          maxAttempts           = 5;
    private String       appName               = "cdnAdmin";
    private String       appLabel              = "CDN";
+
+   private MetaDataCustomizerInterface<QTableMetaData> tableMetaDataCustomizer;
 
 
 
@@ -253,6 +257,28 @@ public class CdnQBitConfig implements QBitConfig
    public CdnQBitConfig withAppLabel(String appLabel)
    {
       this.appLabel = appLabel;
+      return (this);
+   }
+
+
+
+   /*******************************************************************************
+    ** Customizer applied to every cdn_ table (e.g. snake_case column names).
+    *******************************************************************************/
+   @Override
+   public MetaDataCustomizerInterface<QTableMetaData> getTableMetaDataCustomizer()
+   {
+      return (tableMetaDataCustomizer);
+   }
+
+
+
+   /*******************************************************************************
+    ** Fluent setter for tableMetaDataCustomizer.
+    *******************************************************************************/
+   public CdnQBitConfig withTableMetaDataCustomizer(MetaDataCustomizerInterface<QTableMetaData> tableMetaDataCustomizer)
+   {
+      this.tableMetaDataCustomizer = tableMetaDataCustomizer;
       return (this);
    }
 }

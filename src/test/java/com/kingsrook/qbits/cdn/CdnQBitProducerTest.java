@@ -56,6 +56,13 @@ class CdnQBitProducerTest
          .containsExactly("Connection", "Settings", "Activity", "Performance");
       assertThat(instance.getRecordChangeListeners()).isNotEmpty();
       new QInstanceValidator().validate(instance);
+
+      QInstance customized = new QInstance();
+      customized.addBackend(new com.kingsrook.qqq.backend.core.model.metadata.QBackendMetaData().withName("memory")
+         .withBackendType(com.kingsrook.qqq.backend.core.modules.backend.implementations.memory.MemoryBackendModule.class));
+      new CdnQBitProducer().withQBitConfig(new CdnQBitConfig().withBackendName("memory")
+         .withTableMetaDataCustomizer((qInstance, table) -> table.withLabel("Custom " + table.getLabel()))).produce(customized);
+      assertThat(customized.getTable(CdnTables.PROVIDER).getLabel()).isEqualTo("Custom CDN Provider");
    }
 
 
