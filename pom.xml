@@ -22,6 +22,7 @@
       <maven.compiler.source>21</maven.compiler.source>
       <maven.compiler.target>21</maven.compiler.target>
       <jacoco.version>0.8.15</jacoco.version>
+      <aws.sdk.version>2.41.10</aws.sdk.version>
    </properties>
 
    <parent>
@@ -56,8 +57,48 @@
       </dependency>
 
       <dependency>
+         <groupId>software.amazon.awssdk</groupId>
+         <artifactId>cloudfront</artifactId>
+         <version>${aws.sdk.version}</version>
+      </dependency>
+      <dependency>
+         <groupId>software.amazon.awssdk</groupId>
+         <artifactId>cloudwatch</artifactId>
+         <version>${aws.sdk.version}</version>
+      </dependency>
+      <dependency>
+         <groupId>software.amazon.awssdk</groupId>
+         <artifactId>url-connection-client</artifactId>
+         <version>${aws.sdk.version}</version>
+      </dependency>
+
+      <dependency>
          <groupId>org.junit.jupiter</groupId>
          <artifactId>junit-jupiter</artifactId>
+         <scope>test</scope>
+      </dependency>
+      <dependency>
+         <groupId>org.mockito</groupId>
+         <artifactId>mockito-core</artifactId>
+         <version>5.8.0</version>
+         <scope>test</scope>
+      </dependency>
+      <dependency>
+         <groupId>org.wiremock</groupId>
+         <artifactId>wiremock</artifactId>
+         <version>3.13.2</version>
+         <scope>test</scope>
+      </dependency>
+      <dependency>
+         <groupId>org.testcontainers</groupId>
+         <artifactId>testcontainers</artifactId>
+         <version>1.21.4</version>
+         <scope>test</scope>
+      </dependency>
+      <dependency>
+         <groupId>org.testcontainers</groupId>
+         <artifactId>junit-jupiter</artifactId>
+         <version>1.21.4</version>
          <scope>test</scope>
       </dependency>
       <dependency>
