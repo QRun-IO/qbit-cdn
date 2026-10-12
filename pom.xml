@@ -185,14 +185,14 @@
    </build>
 
    <profiles>
-      <!-- QQQ 4.1 APIs (ESB, record-change listeners) until qbit-build-parent imports the 4.1 BOM. -->
+      <!-- QQQ 4.1 APIs until qbit-build-parent imports the 4.1 BOM (as in qbit-quick-search, ADR-0007). -->
       <profile>
-         <id>qqq-4.1</id>
+         <id>qqq-snapshot</id>
          <activation>
             <activeByDefault>true</activeByDefault>
          </activation>
          <properties>
-            <qqq.snapshot.version>4.1.0-RC.3</qqq.snapshot.version>
+            <qqq.snapshot.version>4.1.0-RC.4</qqq.snapshot.version>
          </properties>
          <dependencyManagement>
             <dependencies>
