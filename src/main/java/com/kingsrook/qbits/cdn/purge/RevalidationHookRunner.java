@@ -17,6 +17,8 @@
 package com.kingsrook.qbits.cdn.purge;
 
 
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
 import java.net.InetAddress;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -28,8 +30,6 @@ import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.function.Function;
-import javax.crypto.Mac;
-import javax.crypto.spec.SecretKeySpec;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.kingsrook.qbits.cdn.model.CdnTables;
 import com.kingsrook.qqq.backend.core.actions.tables.QueryAction;

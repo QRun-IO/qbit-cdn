@@ -84,12 +84,6 @@
          <scope>test</scope>
       </dependency>
       <dependency>
-         <groupId>org.wiremock</groupId>
-         <artifactId>wiremock</artifactId>
-         <version>3.13.2</version>
-         <scope>test</scope>
-      </dependency>
-      <dependency>
          <groupId>org.testcontainers</groupId>
          <artifactId>testcontainers</artifactId>
          <version>1.21.4</version>
@@ -111,6 +105,37 @@
 
    <build>
       <plugins>
+         <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-checkstyle-plugin</artifactId>
+            <version>3.3.1</version>
+            <dependencies>
+               <dependency>
+                  <groupId>com.puppycrawl.tools</groupId>
+                  <artifactId>checkstyle</artifactId>
+                  <version>10.12.6</version>
+               </dependency>
+            </dependencies>
+            <configuration>
+               <configLocation>checkstyle/config.xml</configLocation>
+               <headerLocation>checkstyle/license.txt</headerLocation>
+               <encoding>UTF-8</encoding>
+               <consoleOutput>true</consoleOutput>
+               <failsOnError>false</failsOnError>
+               <failOnViolation>true</failOnViolation>
+               <violationSeverity>warning</violationSeverity>
+               <includeTestSourceDirectory>false</includeTestSourceDirectory>
+            </configuration>
+            <executions>
+               <execution>
+                  <id>validate</id>
+                  <phase>validate</phase>
+                  <goals>
+                     <goal>check</goal>
+                  </goals>
+               </execution>
+            </executions>
+         </plugin>
          <plugin>
             <groupId>org.jacoco</groupId>
             <artifactId>jacoco-maven-plugin</artifactId>

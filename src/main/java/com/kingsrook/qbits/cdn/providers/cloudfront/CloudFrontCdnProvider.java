@@ -70,7 +70,7 @@ import software.amazon.awssdk.services.cloudwatch.model.ScanBy;
  ** {@link #testConnection}, {@link #importStats} and {@link #readConfig}
  ** (compare the result with {@link CloudFrontDriftCheck#compare}).</p>
  *******************************************************************************/
-public class CloudFrontCdnProvider implements CdnProviderInterface
+public class CloudFrontCdnProvider implements CdnProviderInterface, com.kingsrook.qbits.cdn.spi.CdnOperations
 {
    /** Default origin custom header that proves a request came through CloudFront. */
    public static final String DEFAULT_ORIGIN_VERIFY_HEADER = "X-Origin-Verify";
@@ -422,5 +422,30 @@ public class CloudFrontCdnProvider implements CdnProviderInterface
          return new CdnException(operation + " failed to reach AWS: " + e.getMessage(), true, e);
       }
       return new CdnException(operation + " failed: " + e.getMessage(), false, e);
+   }
+
+
+
+   /*******************************************************************************
+    ** CdnOperations: connection test in provider-neutral form.
+    *******************************************************************************/
+   @Override
+   public ConnectionTest connectionTest(CdnProviderConfig config)
+   {
+      CloudFrontConnectionResult result = testConnection(config);
+      return (new ConnectionTest(result.ok(), result.distributionDomainName(), result.originDomain(), result.originPort(), result.originVerifyHeaderConfigured(),
+         result.status(), result.message()));
+   }
+
+
+
+   /*******************************************************************************
+    ** CdnOperations: drift between the expected JSON and the distribution.
+    *******************************************************************************/
+   @Override
+   public List<DriftItem> driftFindings(CdnProviderConfig config, String expectedJson) throws CdnException
+   {
+      return (CloudFrontDriftCheck.compare(readConfig(config), expectedJson).stream()
+         .map(finding -> new DriftItem(finding.area(), finding.expected(), finding.actual())).toList());
    }
 }

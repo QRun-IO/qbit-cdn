@@ -147,7 +147,9 @@ public class CdnQBitProducer implements QBitMetaDataProducer<CdnQBitConfig>
          tables.add(customized);
          output.add(customized);
       }
-      for(QProcessMetaData process : CdnProcesses.processes(qBitConfig))
+      List<QProcessMetaData> processes = new ArrayList<>(CdnProcesses.processes(qBitConfig));
+      processes.addAll(com.kingsrook.qbits.cdn.processes.CdnProviderProcesses.processes(qBitConfig));
+      for(QProcessMetaData process : processes)
       {
          process.setSourceQBitName(qBit.getName());
          output.add(process);

@@ -147,10 +147,12 @@ public final class CdnTestSupport
     ** Path-only provider (CloudFront-like): records batches, answers
     ** IN_PROGRESS, completes on check.
     *******************************************************************************/
-   public static class FakePathProvider implements CdnProviderInterface
+   public static class FakePathProvider implements CdnProviderInterface, com.kingsrook.qbits.cdn.spi.CdnOperations
    {
       public static final List<CdnPurgeBatch> SENT = new ArrayList<>();
       public static CdnException              failure;
+      public static boolean                   connectionOk = true;
+      public static List<com.kingsrook.qbits.cdn.spi.CdnOperations.DriftItem> drift = new ArrayList<>();
 
 
 
@@ -161,6 +163,8 @@ public final class CdnTestSupport
       {
          SENT.clear();
          failure = null;
+         connectionOk = true;
+         drift = new ArrayList<>();
       }
 
 
@@ -221,6 +225,41 @@ public final class CdnTestSupport
       public CdnPurgeResult checkPurge(CdnProviderConfig config, String providerRequestId)
       {
          return (CdnPurgeResult.succeeded(providerRequestId));
+      }
+
+
+
+      /*******************************************************************************
+       ** Connection test (fake).
+       *******************************************************************************/
+      @Override
+      public ConnectionTest connectionTest(CdnProviderConfig config)
+      {
+         return (connectionOk ? new ConnectionTest(true, "d1.cloudfront.net", "origin.example.com", 8443, true, "Deployed", "OK")
+            : new ConnectionTest(false, null, null, null, false, null, "AccessDenied"));
+      }
+
+
+
+      /*******************************************************************************
+       ** Two days of stats (fake).
+       *******************************************************************************/
+      @Override
+      public List<com.kingsrook.qbits.cdn.spi.CdnEdgeStat> importStats(CdnProviderConfig config, java.time.LocalDate from, java.time.LocalDate to)
+      {
+         return (List.of(new com.kingsrook.qbits.cdn.spi.CdnEdgeStat(from, 100, 2000, 0.5, 0.1, 90.0),
+            new com.kingsrook.qbits.cdn.spi.CdnEdgeStat(to, 200, 4000, null, null, null)));
+      }
+
+
+
+      /*******************************************************************************
+       ** Drift (fake).
+       *******************************************************************************/
+      @Override
+      public List<DriftItem> driftFindings(CdnProviderConfig config, String expectedJson)
+      {
+         return (drift);
       }
    }
 

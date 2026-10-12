@@ -37,7 +37,8 @@ public final class CdnRuntime
    private static final Map<CdnProviderType, Supplier<CdnProviderInterface>> PROVIDERS           = new ConcurrentHashMap<>();
    private static final Map<String, String>                                  PROCESS_PERMISSIONS = new ConcurrentHashMap<>();
 
-   private static volatile CdnQBitConfig config;
+   private static volatile CdnQBitConfig            config;
+   private static volatile java.util.function.Function<String, String> environment = System::getenv;
    private static volatile Clock         clock = Clock.systemUTC();
 
    static
@@ -194,5 +195,25 @@ public final class CdnRuntime
    public static void setClock(Clock newClock)
    {
       clock = newClock == null ? Clock.systemUTC() : newClock;
+   }
+
+
+
+   /*******************************************************************************
+    ** An environment variable (replaceable in tests).
+    *******************************************************************************/
+   public static String environment(String name)
+   {
+      return (environment.apply(name));
+   }
+
+
+
+   /*******************************************************************************
+    ** Replace the environment lookup (tests); null restores System.getenv.
+    *******************************************************************************/
+   public static void setEnvironment(java.util.function.Function<String, String> lookup)
+   {
+      environment = lookup == null ? System::getenv : lookup;
    }
 }

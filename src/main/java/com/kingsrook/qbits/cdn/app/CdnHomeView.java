@@ -77,12 +77,15 @@ public final class CdnHomeView
    public static String renderHealthCard(CdnHomeData data, String appPath)
    {
       String state = data.overallState();
-      String text = switch(state)
+      String text = "All CDN checks are OK.";
+      if("NOT_CONNECTED".equals(state))
       {
-         case "NOT_CONNECTED" -> "No CDN connected yet.";
-         case "ATTENTION" -> "Needs attention: see the CDN home.";
-         default -> "All CDN checks are OK.";
-      };
+         text = "No CDN connected yet.";
+      }
+      else if("ATTENTION".equals(state))
+      {
+         text = "Needs attention: see the CDN home.";
+      }
       return ("<div style=\"" + CARD + "\"><strong>CDN</strong><p>" + esc(text) + "</p><a href=\"" + esc(appPath) + "\">Open the CDN home</a></div>");
    }
 
