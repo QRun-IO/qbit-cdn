@@ -1,0 +1,1 @@
+{"type": "uri-prefix", "selectors": ["/blog/quick-bits/my-post", "/v1/blog-posts/123"], "purge": true}
