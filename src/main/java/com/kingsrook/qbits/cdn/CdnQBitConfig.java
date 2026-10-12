@@ -41,6 +41,7 @@ public class CdnQBitConfig implements QBitConfig
    private String       appName               = "cdnAdmin";
    private String       appLabel              = "CDN";
    private String       appPath;
+   private String       tablePathPrefix;
 
    private MetaDataCustomizerInterface<QTableMetaData> tableMetaDataCustomizer;
 
@@ -302,6 +303,28 @@ public class CdnQBitConfig implements QBitConfig
    public CdnQBitConfig withAppPath(String appPath)
    {
       this.appPath = appPath;
+      return (this);
+   }
+
+
+
+   /*******************************************************************************
+    ** URL prefix for table and record links (default: the app path). QQQ Next
+    ** apps that link tables flatly use e.g. "/app".
+    *******************************************************************************/
+   public String getTablePathPrefix()
+   {
+      return (tablePathPrefix == null ? getAppPath() : tablePathPrefix);
+   }
+
+
+
+   /*******************************************************************************
+    ** Fluent setter for tablePathPrefix.
+    *******************************************************************************/
+   public CdnQBitConfig withTablePathPrefix(String tablePathPrefix)
+   {
+      this.tablePathPrefix = tablePathPrefix;
       return (this);
    }
 }

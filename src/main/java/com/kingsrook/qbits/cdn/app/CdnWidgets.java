@@ -109,6 +109,16 @@ public final class CdnWidgets
 
 
    /*******************************************************************************
+    ** Prefix of table and record links.
+    *******************************************************************************/
+   public static String tablePathPrefix()
+   {
+      return (CdnRuntime.isInstalled() ? CdnRuntime.getConfig().getTablePathPrefix() : "/cdnAdmin");
+   }
+
+
+
+   /*******************************************************************************
     ** CDN home renderer.
     *******************************************************************************/
    public static class HomeRenderer extends AbstractWidgetRenderer
@@ -119,7 +129,7 @@ public final class CdnWidgets
       @Override
       public RenderWidgetOutput render(RenderWidgetInput input) throws QException
       {
-         return (new RenderWidgetOutput(new RawHTML(null, CdnHomeView.render(CdnHomeData.load(), appPath()))));
+         return (new RenderWidgetOutput(new RawHTML(null, CdnHomeView.render(CdnHomeData.load(), tablePathPrefix()))));
       }
    }
 

@@ -55,7 +55,7 @@ public final class CdnHomeView
 
 
    /*******************************************************************************
-    ** The whole home.
+    ** The whole home; appPath here is the prefix of table and record links.
     *******************************************************************************/
    public static String render(CdnHomeData data, String appPath)
    {

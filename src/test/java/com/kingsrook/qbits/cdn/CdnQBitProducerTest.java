@@ -65,6 +65,8 @@ class CdnQBitProducerTest
       assertThat(customized.getTable(CdnTables.PROVIDER).getLabel()).isEqualTo("Custom CDN Provider");
       assertThat(new CdnQBitConfig().getAppPath()).isEqualTo("/cdnAdmin");
       assertThat(new CdnQBitConfig().withAppPath("/Website/cdnAdmin").getAppPath()).isEqualTo("/Website/cdnAdmin");
+      assertThat(new CdnQBitConfig().getTablePathPrefix()).isEqualTo("/cdnAdmin");
+      assertThat(new CdnQBitConfig().withTablePathPrefix("/app").getTablePathPrefix()).isEqualTo("/app");
    }
 
 
