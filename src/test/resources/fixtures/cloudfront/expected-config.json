@@ -1,0 +1,13 @@
+{
+   "distribution_id": "E2EXAMPLE123",
+   "enabled": true,
+   "aliases": ["kof22.com", "www.kof22.com", "api.kof22.com", "s3.kof22.com"],
+   "origin_domain": "origin.kof22.com",
+   "origin_port": 8443,
+   "origin_protocol_policy": "https-only",
+   "origin_header_names": ["X-Origin-Verify"],
+   "behavior_paths": ["/_next/static/*", "/api/*", "/v1/me*"],
+   "never_cache_paths": ["/api/*", "/v1/me*"],
+   "price_class": "PriceClass_All",
+   "http_version": "http2and3"
+}

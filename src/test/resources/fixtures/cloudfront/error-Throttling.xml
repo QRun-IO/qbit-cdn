@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ErrorResponse xmlns="http://cloudfront.amazonaws.com/doc/2020-05-31/">
+   <Error>
+      <Type>Sender</Type>
+      <Code>Throttling</Code>
+      <Message>Rate exceeded</Message>
+   </Error>
+   <RequestId>00000000-0000-0000-0000-000000000000</RequestId>
+</ErrorResponse>

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Invalidation xmlns="http://cloudfront.amazonaws.com/doc/2020-05-31/">
+   <Id>I2J0I21PCUYOIK</Id>
+   <Status>InProgress</Status>
+   <CreateTime>2026-10-12T10:00:00Z</CreateTime>
+   <InvalidationBatch>
+      <Paths>
+         <Quantity>2</Quantity>
+         <Items>
+            <Path>/blog/quick-bits/my-post*</Path>
+            <Path>/v1/blog-posts/123*</Path>
+         </Items>
+      </Paths>
+      <CallerReference>purge-request-42</CallerReference>
+   </InvalidationBatch>
+</Invalidation>

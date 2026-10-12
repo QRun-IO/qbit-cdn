@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<InvalidationList xmlns="http://cloudfront.amazonaws.com/doc/2020-05-31/">
+   <Marker></Marker>
+   <MaxItems>1</MaxItems>
+   <IsTruncated>false</IsTruncated>
+   <Quantity>0</Quantity>
+</InvalidationList>

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ErrorResponse xmlns="http://cloudfront.amazonaws.com/doc/2020-05-31/">
+   <Error>
+      <Type>Sender</Type>
+      <Code>AccessDenied</Code>
+      <Message>User: arn:aws:iam::111122223333:user/cdn-qbit-kof22 is not authorized to perform: cloudfront:CreateInvalidation</Message>
+   </Error>
+   <RequestId>00000000-0000-0000-0000-000000000000</RequestId>
+</ErrorResponse>
