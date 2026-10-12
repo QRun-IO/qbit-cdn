@@ -39,8 +39,8 @@ public final class CdnHomeView
 
    private static final String GRID  = "display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,22rem),1fr));gap:1rem;";
    private static final String CARD  = "border:1px solid rgba(127,127,127,.3);border-radius:8px;padding:1rem;min-width:0;overflow-wrap:anywhere;";
-   private static final String TABLE = "width:100%;border-collapse:collapse;font-size:.9rem;";
-   private static final String CELL  = "text-align:left;padding:.25rem .5rem .25rem 0;vertical-align:top;";
+   private static final String LIST  = "display:grid;grid-template-columns:minmax(8rem,auto) 1fr;gap:.25rem .75rem;margin:0 0 .75rem;font-size:.9rem;";
+   private static final String ITEMS = "margin:0 0 .75rem;padding-left:1.25rem;font-size:.9rem;";
    private static final String MUTED = "opacity:.75;";
 
 
@@ -107,7 +107,7 @@ public final class CdnHomeView
          {
             continue;
          }
-         html.append("<table style=\"").append(TABLE).append("\">");
+         html.append("<dl style=\"").append(LIST).append("\">");
          row(html, "Provider", provider.name() + " (" + provider.type() + ")");
          row(html, "Distribution", value(provider.distributionId()));
          row(html, "Point DNS at", value(provider.dnsTarget()));
@@ -120,18 +120,16 @@ public final class CdnHomeView
          row(html, "Credential age", provider.credentialAgeDays() == null ? "Not recorded"
             : provider.credentialAgeDays() + " days (rotate every " + CdnHomeData.ROTATION_DAYS + ")"
             + (provider.credentialAgeDays() >= CdnHomeData.ROTATION_WARNING_DAYS ? " - rotation due" : ""));
-         html.append("</table>");
+         html.append("</dl>");
       }
       if(!data.hostnames().isEmpty())
       {
-         html.append("<table style=\"").append(TABLE).append("\"><tr><th style=\"").append(CELL).append("\">Hostname</th><th style=\"").append(CELL)
-            .append("\">Stage</th></tr>");
+         html.append("<ul style=\"").append(ITEMS).append("\">");
          for(CdnHomeData.HostnameView hostname : data.hostnames())
          {
-            html.append("<tr><td style=\"").append(CELL).append("\">").append(esc(hostname.hostname())).append("</td><td style=\"").append(CELL).append("\">")
-               .append(esc(hostname.stage())).append("</td></tr>");
+            html.append("<li>").append(esc(hostname.hostname())).append(": ").append(esc(hostname.stage())).append("</li>");
          }
-         html.append("</table>");
+         html.append("</ul>");
       }
       link(html, appPath, CdnTables.PROVIDER, "Providers");
       close(html);
@@ -151,13 +149,13 @@ public final class CdnHomeView
       }
       for(CdnHomeData.StatView stat : data.stats())
       {
-         html.append("<table style=\"").append(TABLE).append("\">");
+         html.append("<dl style=\"").append(LIST).append("\">");
          row(html, "Provider", stat.provider());
          row(html, "Requests (7 / 30 days)", String.format("%,d / %,d", stat.requests7d(), stat.requests30d()));
          row(html, "Data served (7 / 30 days)", bytes(stat.bytes7d()) + " / " + bytes(stat.bytes30d()));
          row(html, "Cache hit rate (7 days)", stat.hitRate7d() == null ? "Not available (additional metrics are off)" : percent(stat.hitRate7d()));
          row(html, "5xx rate (7 days)", stat.error5xx7d() == null ? "Not reported" : percent(stat.error5xx7d()));
-         html.append("</table>").append(sparkline(stat.dailyRequests()));
+         html.append("</dl>").append(sparkline(stat.dailyRequests()));
       }
       close(html);
    }
@@ -178,17 +176,15 @@ public final class CdnHomeView
       }
       else
       {
-         html.append("<table style=\"").append(TABLE).append("\"><tr><th style=\"").append(CELL).append("\">Request</th><th style=\"").append(CELL)
-            .append("\">Status</th><th style=\"").append(CELL).append("\">When</th></tr>");
+         html.append("<ul style=\"").append(ITEMS).append("\">");
          for(QRecord row : data.recentPurges())
          {
             Instant created = ValueUtils.getValueAsInstant(row.getValue("createDate"));
-            html.append("<tr><td style=\"").append(CELL).append("\"><a href=\"").append(esc(appPath + "/" + CdnTables.PURGE_REQUEST + "/" + row.getValue("id")))
-               .append("\">#").append(esc(String.valueOf(row.getValue("id")))).append("</a></td><td style=\"").append(CELL).append("\">")
-               .append(esc(row.getValueString("status"))).append("</td><td style=\"").append(CELL).append("\">")
-               .append(created == null ? "" : WHEN.format(created)).append("</td></tr>");
+            html.append("<li><a href=\"").append(esc(appPath + "/" + CdnTables.PURGE_REQUEST + "/" + row.getValue("id"))).append("\">#")
+               .append(esc(String.valueOf(row.getValue("id")))).append("</a> ").append(esc(row.getValueString("status")))
+               .append(created == null ? "" : ", " + WHEN.format(created)).append("</li>");
          }
-         html.append("</table>");
+         html.append("</ul>");
       }
       link(html, appPath, CdnTables.PURGE_REQUEST, "All purge requests");
       close(html);
@@ -208,12 +204,12 @@ public final class CdnHomeView
       }
       for(CdnHomeData.BudgetView budget : data.budgets())
       {
-         html.append("<table style=\"").append(TABLE).append("\">");
+         html.append("<dl style=\"").append(LIST).append("\">");
          row(html, "Provider", budget.provider());
          row(html, "Paths billed this month", budget.billed() == 0 ? "No invalidations sent this month." : String.valueOf(budget.billed()));
          row(html, "Soft / hard limit", budget.soft() + " / " + budget.hard() + " (" + budget.free() + " free)");
          row(html, "Projected for the month", String.valueOf(budget.projected()));
-         html.append("</table>");
+         html.append("</dl>");
       }
       close(html);
    }
@@ -258,12 +254,12 @@ public final class CdnHomeView
       }
       else
       {
-         html.append("<table style=\"").append(TABLE).append("\">");
+         html.append("<dl style=\"").append(LIST).append("\">");
          for(Map.Entry<String, Integer> entry : data.openDriftByArea().entrySet())
          {
             row(html, entry.getKey(), entry.getValue() + " open");
          }
-         html.append("</table>");
+         html.append("</dl>");
       }
       link(html, appPath, CdnTables.DRIFT_FINDING, "Drift findings");
       close(html);
@@ -327,8 +323,7 @@ public final class CdnHomeView
     *******************************************************************************/
    private static void row(StringBuilder html, String label, String value)
    {
-      html.append("<tr><th style=\"").append(CELL).append("font-weight:600\">").append(esc(label)).append("</th><td style=\"").append(CELL).append("\">")
-         .append(esc(value)).append("</td></tr>");
+      html.append("<dt style=\"font-weight:600\">").append(esc(label)).append("</dt><dd style=\"margin:0\">").append(esc(value)).append("</dd>");
    }
 
 
