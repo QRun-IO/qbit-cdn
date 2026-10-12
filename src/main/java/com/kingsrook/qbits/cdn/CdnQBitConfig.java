@@ -40,6 +40,7 @@ public class CdnQBitConfig implements QBitConfig
    private int          maxAttempts           = 5;
    private String       appName               = "cdnAdmin";
    private String       appLabel              = "CDN";
+   private String       appPath;
 
    private MetaDataCustomizerInterface<QTableMetaData> tableMetaDataCustomizer;
 
@@ -279,6 +280,28 @@ public class CdnQBitConfig implements QBitConfig
    public CdnQBitConfig withTableMetaDataCustomizer(MetaDataCustomizerInterface<QTableMetaData> tableMetaDataCustomizer)
    {
       this.tableMetaDataCustomizer = tableMetaDataCustomizer;
+      return (this);
+   }
+
+
+
+   /*******************************************************************************
+    ** URL path of the app for links (default "/" + appName; set it when the
+    ** host nests the app, e.g. "/Website/cdnAdmin").
+    *******************************************************************************/
+   public String getAppPath()
+   {
+      return (appPath == null ? "/" + appName : appPath);
+   }
+
+
+
+   /*******************************************************************************
+    ** Fluent setter for appPath.
+    *******************************************************************************/
+   public CdnQBitConfig withAppPath(String appPath)
+   {
+      this.appPath = appPath;
       return (this);
    }
 }

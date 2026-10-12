@@ -101,9 +101,9 @@ public final class CdnWidgets
    /*******************************************************************************
     ** Path of the app (for links).
     *******************************************************************************/
-   static String appPath()
+   public static String appPath()
    {
-      return ("/" + (CdnRuntime.isInstalled() ? CdnRuntime.getConfig().getAppName() : "cdnAdmin"));
+      return (CdnRuntime.isInstalled() ? CdnRuntime.getConfig().getAppPath() : "/cdnAdmin");
    }
 
 

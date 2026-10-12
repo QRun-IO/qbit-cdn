@@ -63,6 +63,8 @@ class CdnQBitProducerTest
       new CdnQBitProducer().withQBitConfig(new CdnQBitConfig().withBackendName("memory")
          .withTableMetaDataCustomizer((qInstance, table) -> table.withLabel("Custom " + table.getLabel()))).produce(customized);
       assertThat(customized.getTable(CdnTables.PROVIDER).getLabel()).isEqualTo("Custom CDN Provider");
+      assertThat(new CdnQBitConfig().getAppPath()).isEqualTo("/cdnAdmin");
+      assertThat(new CdnQBitConfig().withAppPath("/Website/cdnAdmin").getAppPath()).isEqualTo("/Website/cdnAdmin");
    }
 
 
