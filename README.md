@@ -46,6 +46,12 @@ CloudFront credentials: `<secretRef>_ACCESS_KEY_ID` / `<secretRef>_SECRET_ACCESS
 Drift: the OpenTofu `expected_config` JSON in `CDN_EXPECTED_CONFIG` (or the
 variable named by the provider setting `expectedConfigEnv`).
 
+## Build
+
 ```sh
 ./mvnw verify   # tests, coverage gate, checkstyle
 ```
+
+## License
+
+Apache License 2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
