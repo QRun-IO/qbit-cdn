@@ -34,11 +34,16 @@ import com.kingsrook.qbits.cdn.tags.TagTemplate;
 import com.kingsrook.qqq.backend.core.actions.tables.GetAction;
 import com.kingsrook.qqq.backend.core.context.QContext;
 import com.kingsrook.qqq.backend.core.exceptions.QException;
+import com.kingsrook.qqq.backend.core.logging.QLogger;
 import com.kingsrook.qqq.backend.core.model.actions.tables.get.GetInput;
 import com.kingsrook.qqq.backend.core.model.data.QRecord;
+import com.kingsrook.qqq.backend.core.model.metadata.fields.QFieldMetaData;
+import com.kingsrook.qqq.backend.core.model.metadata.possiblevalues.QPossibleValueSource;
+import com.kingsrook.qqq.backend.core.model.metadata.possiblevalues.QPossibleValueSourceType;
 import com.kingsrook.qqq.backend.core.model.metadata.tables.QTableMetaData;
 import com.kingsrook.qqq.backend.core.utils.StringUtils;
 import com.kingsrook.qqq.backend.core.utils.ValueUtils;
+import static com.kingsrook.qqq.backend.core.logging.LogUtils.logPair;
 
 
 /*******************************************************************************
@@ -54,13 +59,20 @@ import com.kingsrook.qqq.backend.core.utils.ValueUtils;
  **   purges nothing.
  **
  ** A dotted placeholder "{blog.slug}" reads field "slug" of the record that
- ** field "blogId" points to in table "blog" (the xId convention).
+ ** field "blogId" points to (the xId convention). The joined table is the one
+ ** named by that field's possible-value source (its table name, or the source
+ ** name when that names a table), so apps that prefix their tables ("cms_blog")
+ ** work; with no field or possible-value source, the bare prefix ("blog") is
+ ** the table name. An unresolvable join is skipped, and logged once.
  *******************************************************************************/
 public class TagRuleEngine
 {
    private static final Pattern PLACEHOLDER = Pattern.compile("\\{([A-Za-z0-9_]+)\\.([A-Za-z0-9_]+)}");
 
-   private final Map<String, QRecord> joinCache = new HashMap<>();
+   private static final QLogger LOG = QLogger.getLogger(TagRuleEngine.class);
+
+   private final Map<String, QRecord> joinCache     = new HashMap<>();
+   private final Set<String>          warnedMissing = new LinkedHashSet<>();
 
 
 
@@ -172,7 +184,7 @@ public class TagRuleEngine
          {
             continue;
          }
-         QRecord target = lookup(joined, foreignKey);
+         QRecord target = lookup(rule.getValueString("tableName"), joined, foreignKey);
          if(target != null)
          {
             values.put(joined + "." + field, target.getValue(field));
@@ -184,17 +196,57 @@ public class TagRuleEngine
 
 
    /*******************************************************************************
-    ** One joined record, cached for the life of this engine.
+    ** The table a placeholder prefix joins to: the table behind the possible-value
+    ** source of the prefix's "xId" field on the source table, else the bare
+    ** prefix.
     *******************************************************************************/
-   private QRecord lookup(String tableName, Serializable id) throws QException
+   static String joinedTableName(String sourceTable, String prefix)
    {
-      String key = tableName + "#" + id;
+      QFieldMetaData field = null;
+      if(sourceTable != null)
+      {
+         QTableMetaData source = QContext.getQInstance().getTable(sourceTable);
+         field = source == null ? null : source.getFields().get(prefix + "Id");
+      }
+      String pvsName = field == null ? null : field.getPossibleValueSourceName();
+      if(pvsName == null)
+      {
+         return (prefix);
+      }
+      QPossibleValueSource pvs = QContext.getQInstance().getPossibleValueSource(pvsName);
+      if(pvs != null && pvs.getType() == QPossibleValueSourceType.TABLE && StringUtils.hasContent(pvs.getTableName()))
+      {
+         return (pvs.getTableName());
+      }
+      return (pvsName);
+   }
+
+
+
+   /*******************************************************************************
+    ** One joined record, cached for the life of this engine. A missing table is
+    ** logged once and yields null.
+    *******************************************************************************/
+   private QRecord lookup(String sourceTable, String prefix, Serializable id) throws QException
+   {
+      String tableName = joinedTableName(sourceTable, prefix);
+      String key       = tableName + "#" + id;
       if(joinCache.containsKey(key))
       {
          return (joinCache.get(key));
       }
       QTableMetaData table = QContext.getQInstance().getTable(tableName);
-      QRecord found = table == null ? null : new GetAction().executeForRecord(new GetInput(tableName).withPrimaryKey(id));
+      if(table == null)
+      {
+         if(warnedMissing.add(tableName))
+         {
+            LOG.warn("A CDN tag rule placeholder joins to a table that does not exist; its values are skipped",
+               logPair("placeholder", prefix), logPair("sourceTable", sourceTable), logPair("table", tableName));
+         }
+         joinCache.put(key, null);
+         return (null);
+      }
+      QRecord found = new GetAction().executeForRecord(new GetInput(tableName).withPrimaryKey(id));
       joinCache.put(key, found);
       return (found);
    }
