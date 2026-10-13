@@ -31,6 +31,18 @@ Design: QRun-IO/qqq `docs/specs/2026-10-12-qbit-cdn-design.md`.
   NONE. See `docs/cloudfront-expected-config.md`.
 - **Permissions:** `cdn.view`, `cdn.purge`, `cdn.purgeAll`, `cdn.admin`.
 
+## Purge-path placeholders
+
+`cdn_table_tag_rule` templates (`tagTemplates`, `invalidationPaths`) can use `{field}` for the changed record's own fields and `{prefix.field}` for a joined record, e.g. `/blog/{blog.slug}/{slug}*`.
+
+A joined placeholder is resolved like this:
+
+1. The foreign-key field is `<prefix>Id` on the rule's table (`blogId` for `{blog.slug}`).
+2. The joined table is the one behind that field's possible-value source: the source's table name for a table-type source, or the source name when it names a table. So `{blog.slug}` reads `cms_blog` when `blogId` has a possible-value source on `cms_blog`.
+3. With no such field or possible-value source, the bare prefix is the table name (`blog`).
+
+If the joined table does not exist, the placeholder is skipped (the rest of the template is dropped, as for any missing value) and a warning is logged once per table per rule evaluation.
+
 ## Install
 
 ```java
