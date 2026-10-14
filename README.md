@@ -58,6 +58,36 @@ CloudFront credentials: `<secretRef>_ACCESS_KEY_ID` / `<secretRef>_SECRET_ACCESS
 Drift: the OpenTofu `expected_config` JSON in `CDN_EXPECTED_CONFIG` (or the
 variable named by the provider setting `expectedConfigEnv`).
 
+## Revalidation hooks
+
+Requires QQQ **4.1.0-RC.5** (the default `qqq-snapshot` profile imports the released BOM;
+its historical property name does not select a core SNAPSHOT).
+
+New `cdn_revalidation_hook` rows default `signatureFormat` to `STANDARD_WEBHOOKS`;
+existing rows with a null format keep the `LEGACY` signature. Signed requests use core `WebhookSigner` and
+`WebhookSecret`: `webhook-id`, `webhook-timestamp`, and `webhook-signature`.
+Rows on `LEGACY` (or null) keep sending
+`X-Revalidate-Signature: sha256=<lowercase hex HMAC-SHA256 of the body>`.
+Legacy keys remain the exact UTF-8 environment value, with no trimming or decoding.
+Standard keys must contain at least 16 bytes after core parsing (trimmed raw text,
+or base64-decoded `whsec_` text). `secretRef` names the environment variable;
+as before, no resolved secret means no signature headers.
+
+Core `SafeHttpClient` now enforces HTTPS and rejects internal addresses by default.
+For an internal HTTP pod endpoint explicitly set `allowPlainHttp=true` and
+`internalAllowlist` to its exact hostname, a `.suffix`, IP, or CIDR (comma/whitespace
+separated). Metadata and unspecified addresses remain blocked. Every DNS address
+is checked before fan-out; the original hostname is retained for Host/TLS, and
+connections use the checked addresses without resolving again. Redirects fail,
+responses are bounded to 64 KiB, and `timeoutMs` is a positive per-request total
+limit (default 5000). These transport rules apply to both signature formats.
+
+Host apps must migrate `cdn_revalidation_hook` to add `signatureFormat` (string),
+`allowPlainHttp` (boolean), and `internalAllowlist` (text). Backfill `LEGACY` for
+old receivers; configure internal network exceptions explicitly before dispatch.
+See [receiver migration](docs/revalidation-hook-migration.md) for the inspected
+KoF22 receiver and exact changes required.
+
 ## Build
 
 ```sh

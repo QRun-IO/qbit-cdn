@@ -4,6 +4,11 @@ All notable changes to this project are documented here. The format follows Keep
 
 ## [0.1.1] - Unreleased
 
+### Changed
+- Require released QQQ BOM 4.1.0-RC.5; revalidation hooks default to core Standard Webhooks signing. Per-hook `signatureFormat=LEGACY` preserves the prior header and signature bytes.
+- Use core `SafeHttpClient` for revalidation requests: HTTPS/public targets by default, explicit `allowPlainHttp`/`internalAllowlist` exceptions, bounded responses and checked DNS pinning. Fan-out preserves Host/TLS identity. Host schema migration and receiver migration are described in README and `docs/revalidation-hook-migration.md`.
+
+
 ### Fixed
 - Tag rule `{prefix.field}` placeholders now resolve the joined table from the `<prefix>Id` field's possible-value source, so prefixed tables (`cms_blog`) work; a missing joined table is logged instead of silently skipped.
 

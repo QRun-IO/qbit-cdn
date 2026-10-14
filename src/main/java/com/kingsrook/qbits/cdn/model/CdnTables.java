@@ -54,11 +54,12 @@ public final class CdnTables
    public static final List<String> ALL = List.of(PROVIDER, HOSTNAME, CACHE_POLICY, TABLE_TAG_RULE, PURGE_REQUEST, REVALIDATION_HOOK,
       EDGE_STAT_DAILY, ORIGIN_CHECK, DRIFT_FINDING);
 
-   public static final String PVS_PROVIDER_TYPE = "cdn_provider_type";
-   public static final String PVS_STAGE         = "cdn_hostname_stage";
-   public static final String PVS_PURGE_STATUS  = "cdn_purge_status";
-   public static final String PVS_PURGE_SOURCE  = "cdn_purge_source";
-   public static final String PVS_POLICY_CLASS  = "cdn_policy_class";
+   public static final String PVS_PROVIDER_TYPE    = "cdn_provider_type";
+   public static final String PVS_STAGE            = "cdn_hostname_stage";
+   public static final String PVS_PURGE_STATUS     = "cdn_purge_status";
+   public static final String PVS_PURGE_SOURCE     = "cdn_purge_source";
+   public static final String PVS_SIGNATURE_FORMAT = "cdn_signature_format";
+   public static final String PVS_POLICY_CLASS     = "cdn_policy_class";
 
 
 
@@ -95,6 +96,7 @@ public final class CdnTables
          QPossibleValueSource.newForEnum(PVS_PURGE_STATUS, CdnPurgeStatus.values()),
          QPossibleValueSource.newForEnum(PVS_PURGE_SOURCE, CdnPurgeSource.values()),
          QPossibleValueSource.newForEnum(PVS_POLICY_CLASS, CdnPolicyClass.values()),
+         QPossibleValueSource.newForEnum(PVS_SIGNATURE_FORMAT, CdnSignatureFormat.values()),
          QPossibleValueSource.newForTable(PROVIDER),
          QPossibleValueSource.newForTable(HOSTNAME)));
    }
@@ -318,6 +320,9 @@ public final class CdnTables
          .withField(new QFieldMetaData("url", QFieldType.STRING).withIsRequired(true).withMaxLength(500))
          .withField(new QFieldMetaData("fanOutDns", QFieldType.BOOLEAN).withDefaultValue(false))
          .withField(new QFieldMetaData("secretRef", QFieldType.STRING).withMaxLength(100))
+         .withField(new QFieldMetaData("signatureFormat", QFieldType.STRING).withPossibleValueSourceName(PVS_SIGNATURE_FORMAT).withDefaultValue(CdnSignatureFormat.STANDARD_WEBHOOKS.name()))
+         .withField(new QFieldMetaData("allowPlainHttp", QFieldType.BOOLEAN).withDefaultValue(false))
+         .withField(new QFieldMetaData("internalAllowlist", QFieldType.TEXT))
          .withField(new QFieldMetaData("timeoutMs", QFieldType.INTEGER).withDefaultValue(5000))
          .withField(new QFieldMetaData("enabled", QFieldType.BOOLEAN).withDefaultValue(true)));
    }

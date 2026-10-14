@@ -192,7 +192,7 @@
             <activeByDefault>true</activeByDefault>
          </activation>
          <properties>
-            <qqq.snapshot.version>4.1.0-RC.4</qqq.snapshot.version>
+            <qqq.snapshot.version>4.1.0-RC.5</qqq.snapshot.version>
          </properties>
          <dependencyManagement>
             <dependencies>
