@@ -97,3 +97,18 @@ KoF22 receiver and exact changes required.
 ## License
 
 Apache License 2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
+
+### Before a CDN is live
+
+With no enabled CDN provider (including providers of type `NONE`), purges are
+recorded only, not sent. A real provider also needs a `LIVE` or `LOCKED` hostname
+with purging enabled. Purge From CDN, Purge Everything, and Retry Purge show a
+Review warning and a recorded-only Result when sending is unavailable. Requests
+for enabled providers remain visible with `SKIPPED_NONE_PROVIDER` or
+`SKIPPED_STAGE_OFF`; with no enabled provider, no new request row is created.
+The home Connection and Health cards explain the unconfigured state, and purge
+activity labels recorded-only requests when disconnected.
+
+This version does not run origin header checks. The Origin headers card says
+nothing has been checked until the host application writes results to the
+standard `cdn_origin_check` table; those results continue to appear normally.

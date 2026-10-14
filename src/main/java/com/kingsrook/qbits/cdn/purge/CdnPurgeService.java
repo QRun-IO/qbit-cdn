@@ -121,6 +121,36 @@ public final class CdnPurgeService
 
 
    /*******************************************************************************
+    ** Sending eligibility for one provider, or all enabled providers when null.
+    ** A pending status means at least one provider can send; otherwise the
+    ** status gives the same reason used when recording a new request.
+    *******************************************************************************/
+   public static CdnPurgeStatus sendingStatus(Serializable providerId) throws QException
+   {
+      QQueryFilter filter = new QQueryFilter(new QFilterCriteria("enabled", QCriteriaOperator.EQUALS, true));
+      if(providerId != null)
+      {
+         filter.addCriteria(new QFilterCriteria("id", QCriteriaOperator.EQUALS, providerId));
+      }
+      CdnPurgeStatus status = CdnPurgeStatus.SKIPPED_NONE_PROVIDER;
+      for(QRecord provider : new QueryAction().execute(new QueryInput(CdnTables.PROVIDER).withFilter(filter)).getRecords())
+      {
+         CdnPurgeStatus candidate = initialStatus(provider);
+         if(candidate == CdnPurgeStatus.PENDING)
+         {
+            return (candidate);
+         }
+         if(candidate == CdnPurgeStatus.SKIPPED_STAGE_OFF)
+         {
+            status = candidate;
+         }
+      }
+      return (status);
+   }
+
+
+
+   /*******************************************************************************
     ** Status of a new request for a provider.
     *******************************************************************************/
    static CdnPurgeStatus initialStatus(QRecord provider) throws QException

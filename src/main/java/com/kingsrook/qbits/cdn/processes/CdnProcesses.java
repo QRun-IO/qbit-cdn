@@ -168,6 +168,56 @@ public final class CdnProcesses
 
 
    /*******************************************************************************
+    ** Summary counts for requests that cannot be sent, shared by all actions.
+    *******************************************************************************/
+   private static class UnsentSummary
+   {
+      private final ProcessSummaryLine absent = line(Status.WARNING,
+         "record has no enabled CDN provider", "records have no enabled CDN provider",
+         "record had no enabled CDN provider (no purge request recorded)", "records had no enabled CDN provider (no purge requests recorded)");
+      private final ProcessSummaryLine none = line(Status.WARNING,
+         "No CDN provider configured: purges are recorded only, not sent.", "No CDN provider configured: purges are recorded only, not sent.",
+         "purge request was recorded (not sent: no CDN provider)", "purge requests were recorded (not sent: no CDN provider)");
+      private final ProcessSummaryLine off = line(Status.WARNING,
+         "CDN hostnames are not live: purges are recorded only, not sent.", "CDN hostnames are not live: purges are recorded only, not sent.",
+         "purge request was recorded (not sent: CDN hostnames are not live)", "purge requests were recorded (not sent: CDN hostnames are not live)");
+
+
+
+      /*******************************************************************************
+       ** Count a skipped request; returns whether it cannot be sent.
+       *******************************************************************************/
+      boolean add(CdnPurgeStatus status)
+      {
+         if(status == CdnPurgeStatus.SKIPPED_NONE_PROVIDER)
+         {
+            none.incrementCount(1);
+            return (true);
+         }
+         if(status == CdnPurgeStatus.SKIPPED_STAGE_OFF)
+         {
+            off.incrementCount(1);
+            return (true);
+         }
+         return (false);
+      }
+
+
+
+      /*******************************************************************************
+       ** Include only reasons encountered by this action.
+       *******************************************************************************/
+      void append(ArrayList<ProcessSummaryLineInterface> lines)
+      {
+         absent.addSelfToListIfAnyCount(lines);
+         none.addSelfToListIfAnyCount(lines);
+         off.addSelfToListIfAnyCount(lines);
+      }
+   }
+
+
+
+   /*******************************************************************************
     ** Scheduled: send due purges and poll in-progress ones.
     *******************************************************************************/
    public static class DispatchStep implements BackendStep
@@ -189,6 +239,7 @@ public final class CdnProcesses
     *******************************************************************************/
    public static class PurgeRecordsTransform extends AbstractTransformStep implements ProcessSummaryProviderInterface
    {
+      private final UnsentSummary unsent = new UnsentSummary();
       private final ProcessSummaryLine records  = line(Status.OK, "record will be purged", "records will be purged",
          "record was purged", "records were purged");
       private final ProcessSummaryLine noRule   = line(Status.INFO, "record has no CDN tag rule (no change)", "records have no CDN tag rule (no change)",
@@ -207,6 +258,7 @@ public final class CdnProcesses
          String table = input.getValueString(StreamedETLWithFrontendProcess.FIELD_SOURCE_TABLE);
          List<QRecord> rules = rules(table);
          TagRuleEngine engine = new TagRuleEngine();
+         CdnPurgeStatus sending = CdnPurgeService.sendingStatus(null);
          for(QRecord record : input.getRecords())
          {
             List<String> tags = new ArrayList<>();
@@ -226,7 +278,10 @@ public final class CdnProcesses
             recordPaths.forEach(path -> paths.add(path.path()));
             record.setValue("cdnTags", String.join("\n", tags));
             record.setValue("cdnPaths", com.kingsrook.qbits.cdn.purge.PurgeText.paths(recordPaths));
-            records.incrementCountAndAddPrimaryKey(record.getValue("id"));
+            if(!unsent.add(sending))
+            {
+               records.incrementCountAndAddPrimaryKey(record.getValue("id"));
+            }
             output.getRecords().add(record);
          }
       }
@@ -249,6 +304,7 @@ public final class CdnProcesses
             lines.add(pathLine);
          }
          noRule.addSelfToListIfAnyCount(lines);
+         unsent.append(lines);
          return (lines);
       }
    }
@@ -256,10 +312,11 @@ public final class CdnProcesses
 
 
    /*******************************************************************************
-    ** Purge From CDN, execute: one purge request (sent at once, hubs included).
+    ** Purge From CDN, execute: record requests with hubs included.
     *******************************************************************************/
    public static class PurgeRecordsLoad extends AbstractLoadStep implements ProcessSummaryProviderInterface
    {
+      private final UnsentSummary unsent = new UnsentSummary();
       private final ProcessSummaryLine requested = line(Status.OK, "purge request will be recorded", "purge requests will be recorded",
          "purge request was recorded (sent within seconds)", "purge requests were recorded (sent within seconds)");
 
@@ -277,7 +334,17 @@ public final class CdnProcesses
             List<QRecord> rows = CdnPurgeService.enqueue(new CdnPurgeService.Request(CdnPurgeKind.TAG.name(),
                com.kingsrook.qbits.cdn.purge.PurgeText.tags(record.getValueString("cdnTags")),
                com.kingsrook.qbits.cdn.purge.PurgeText.paths(record.getValueString("cdnPaths")), true, CdnPurgeSource.RECORD_ACTION, table, record.getValue("id")));
-            requested.incrementCount(rows.size());
+            if(rows.isEmpty())
+            {
+               unsent.absent.incrementCount(1);
+            }
+            for(QRecord row : rows)
+            {
+               if(!unsent.add(CdnPurgeStatus.valueOf(row.getValueString("status"))))
+               {
+                  requested.incrementCount(1);
+               }
+            }
             output.getRecords().add(record);
          }
       }
@@ -296,6 +363,7 @@ public final class CdnProcesses
          {
             transform.noRule.addSelfToListIfAnyCount(lines);
          }
+         unsent.append(lines);
          return (lines);
       }
    }
@@ -307,6 +375,7 @@ public final class CdnProcesses
     *******************************************************************************/
    public static class RetryTransform extends AbstractTransformStep implements ProcessSummaryProviderInterface
    {
+      private final UnsentSummary unsent = new UnsentSummary();
       private final ProcessSummaryLine retry = line(Status.OK, "purge request will be sent again", "purge requests will be sent again",
          "purge request was queued again", "purge requests were queued again");
       private final ProcessSummaryLine skip  = line(Status.INFO, "purge request has not failed (no change)", "purge requests have not failed (no change)",
@@ -325,7 +394,10 @@ public final class CdnProcesses
             String status = record.getValueString("status");
             if(CdnPurgeStatus.FAILED.name().equals(status) || CdnPurgeStatus.DEAD.name().equals(status) || CdnPurgeStatus.DEFERRED_BUDGET.name().equals(status))
             {
-               retry.incrementCountAndAddPrimaryKey(record.getValue("id"));
+               if(!unsent.add(CdnPurgeService.sendingStatus(record.getValue("cdnProviderId"))))
+               {
+                  retry.incrementCountAndAddPrimaryKey(record.getValue("id"));
+               }
                output.getRecords().add(record);
             }
             else
@@ -346,6 +418,7 @@ public final class CdnProcesses
          ArrayList<ProcessSummaryLineInterface> lines = new ArrayList<>();
          retry.addSelfToListIfAnyCount(lines);
          skip.addSelfToListIfAnyCount(lines);
+         unsent.append(lines);
          return (lines);
       }
    }
@@ -353,10 +426,16 @@ public final class CdnProcesses
 
 
    /*******************************************************************************
-    ** Retry Purge, execute: back to PENDING (sent on the next dispatcher pass).
+    ** Retry Purge, execute: queue live providers or record why sending is skipped.
     *******************************************************************************/
-   public static class RetryLoad extends AbstractLoadStep
+   public static class RetryLoad extends AbstractLoadStep implements ProcessSummaryProviderInterface
    {
+      private final UnsentSummary unsent = new UnsentSummary();
+      private final ProcessSummaryLine requested = line(Status.OK, "purge request will be recorded", "purge requests will be recorded",
+         "purge request was queued again", "purge requests were queued again");
+
+
+
       /*******************************************************************************
        ** Reset the rows.
        *******************************************************************************/
@@ -366,7 +445,12 @@ public final class CdnProcesses
          List<QRecord> updates = new ArrayList<>();
          for(QRecord record : input.getRecords())
          {
-            updates.add(new QRecord().withValue("id", record.getValue("id")).withValue("status", CdnPurgeStatus.PENDING.name())
+            CdnPurgeStatus status = CdnPurgeService.sendingStatus(record.getValue("cdnProviderId"));
+            if(!unsent.add(status))
+            {
+               requested.incrementCount(1);
+            }
+            updates.add(new QRecord().withValue("id", record.getValue("id")).withValue("status", status.name())
                .withValue("source", CdnPurgeSource.RETRY.name()).withValue("attempts", 0).withValue("nextAttemptDate", null)
                .withValue("errorMessage", null).withValue("completedDate", null).withValue("modifyDate", CdnRuntime.clock().instant()));
          }
@@ -374,6 +458,24 @@ public final class CdnProcesses
          {
             output.getRecords().addAll(new UpdateAction().execute(new UpdateInput(CdnTables.PURGE_REQUEST).withRecords(updates)).getRecords());
          }
+      }
+
+
+
+      /*******************************************************************************
+       ** Result lines from the requests recorded during execution.
+       *******************************************************************************/
+      @Override
+      public ArrayList<ProcessSummaryLineInterface> getProcessSummary(RunBackendStepOutput output, boolean isForResultScreen)
+      {
+         ArrayList<ProcessSummaryLineInterface> lines = new ArrayList<>();
+         requested.addSelfToListIfAnyCount(lines);
+         if(getTransformStep() instanceof RetryTransform transform)
+         {
+            transform.skip.addSelfToListIfAnyCount(lines);
+         }
+         unsent.append(lines);
+         return (lines);
       }
    }
 
@@ -384,6 +486,7 @@ public final class CdnProcesses
     *******************************************************************************/
    public static class PurgeHostnameTransform extends AbstractTransformStep implements ProcessSummaryProviderInterface
    {
+      private final UnsentSummary unsent = new UnsentSummary();
       private final ProcessSummaryLine providers = line(Status.WARNING,
          "CDN distribution will be purged completely (every hostname on it)", "CDN distributions will be purged completely (every hostname on them)",
          "CDN distribution purge was recorded", "CDN distribution purges were recorded");
@@ -402,7 +505,10 @@ public final class CdnProcesses
             Serializable providerId = record.getValue("cdnProviderId");
             if(providerId != null && seen.add(providerId))
             {
-               providers.incrementCountAndAddPrimaryKey(record.getValue("id"));
+               if(!unsent.add(CdnPurgeService.sendingStatus(providerId)))
+               {
+                  providers.incrementCountAndAddPrimaryKey(record.getValue("id"));
+               }
                output.getRecords().add(record);
             }
          }
@@ -418,6 +524,7 @@ public final class CdnProcesses
       {
          ArrayList<ProcessSummaryLineInterface> lines = new ArrayList<>();
          providers.addSelfToListIfAnyCount(lines);
+         unsent.append(lines);
          return (lines);
       }
    }
@@ -427,8 +534,14 @@ public final class CdnProcesses
    /*******************************************************************************
     ** Purge Everything, execute.
     *******************************************************************************/
-   public static class PurgeHostnameLoad extends AbstractLoadStep
+   public static class PurgeHostnameLoad extends AbstractLoadStep implements ProcessSummaryProviderInterface
    {
+      private final UnsentSummary unsent = new UnsentSummary();
+      private final ProcessSummaryLine requested = line(Status.OK, "purge request will be recorded", "purge requests will be recorded",
+         "CDN distribution purge was recorded", "CDN distribution purges were recorded");
+
+
+
       /*******************************************************************************
        ** Record an ALL purge for each provider.
        *******************************************************************************/
@@ -437,10 +550,35 @@ public final class CdnProcesses
       {
          for(QRecord record : input.getRecords())
          {
-            CdnPurgeService.enqueueFor(record.getValue("cdnProviderId"), new CdnPurgeService.Request(CdnPurgeKind.ALL.name(), List.of(), List.of(), true,
+            List<QRecord> rows = CdnPurgeService.enqueueFor(record.getValue("cdnProviderId"), new CdnPurgeService.Request(CdnPurgeKind.ALL.name(), List.of(), List.of(), true,
                CdnPurgeSource.MANUAL, CdnTables.HOSTNAME, record.getValue("id")));
+            if(rows.isEmpty())
+            {
+               unsent.absent.incrementCount(1);
+            }
+            for(QRecord row : rows)
+            {
+               if(!unsent.add(CdnPurgeStatus.valueOf(row.getValueString("status"))))
+               {
+                  requested.incrementCount(1);
+               }
+            }
             output.getRecords().add(record);
          }
+      }
+
+
+
+      /*******************************************************************************
+       ** Result lines from the requests recorded during execution.
+       *******************************************************************************/
+      @Override
+      public ArrayList<ProcessSummaryLineInterface> getProcessSummary(RunBackendStepOutput output, boolean isForResultScreen)
+      {
+         ArrayList<ProcessSummaryLineInterface> lines = new ArrayList<>();
+         requested.addSelfToListIfAnyCount(lines);
+         unsent.append(lines);
+         return (lines);
       }
    }
 
