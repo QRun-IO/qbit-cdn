@@ -79,6 +79,98 @@ class CdnOriginCheckSafetyTest
 
 
    /*******************************************************************************
+    ** IPv6 is an allowlist, built from raw bytes so the IPv6 path is really used (Java
+    ** turns ::ffff:a.b.c.d literals into IPv4 addresses).
+    *******************************************************************************/
+   @Test
+   void ipv6IsAnAllowlistOfGlobalUnicast() throws Exception
+   {
+      for(String hex : List.of("00000000000000000000ffff7f000001", "00000000000000000000ffffa9fea9fe", "0000000000000000ffff00007f000001", "0064ff9b0000000000000000a9fea9fe",
+         "0064ff9b0001000000000000" + "7f000001", "20010db8000000000000000000000001", "01000000000000000000000000000001", "20010000000000000000000000000001",
+         "2002 7f00 0001 0000 0000 0000 0000 0001".replace(" ", ""), "fc000000000000000000000000000001", "fe800000000000000000000000000001", "ff020000000000000000000000000001",
+         "00000000000000000000000000000001", "00000000000000000000000000000000", "40000000000000000000000000000001"))
+      {
+         assertThat(CdnOriginCheck.isPublicV6(bytes(hex))).as(hex).isFalse();
+      }
+      for(String hex : List.of("2606470047000000000000000000" + "1111", "20014860486000000000000000008888", "0064ff9b000000000000000008080808", "00000000000000000000ffff08080808",
+         "2002080808080000000000000000" + "0001"))
+      {
+         assertThat(CdnOriginCheck.isPublicV6(bytes(hex))).as(hex).isTrue();
+      }
+      assertThat(CdnOriginCheck.isPublic(java.net.Inet6Address.getByAddress(bytes("20014860486000000000000000008888")))).isTrue();
+   }
+
+
+
+   /*******************************************************************************
+    ** An origin that drips one byte at a time (here, never finishing the TLS handshake)
+    ** is cut off at the hard deadline, not after hours.
+    *******************************************************************************/
+   @Test
+   void aDrippingOriginIsCutOffAtTheDeadline() throws Exception
+   {
+      try(java.net.ServerSocket server = new java.net.ServerSocket(0, 1, InetAddress.getByName("127.0.0.1")))
+      {
+         Thread dripper = new Thread(() ->
+         {
+            try(java.net.Socket client = server.accept())
+            {
+               for(int i = 0; i < 60; i++)
+               {
+                  client.getOutputStream().write(0x16);
+                  client.getOutputStream().flush();
+                  Thread.sleep(300);
+               }
+            }
+            catch(Exception e)
+            {
+               // the client gave up
+            }
+         });
+         dripper.setDaemon(true);
+         dripper.start();
+         long start = System.nanoTime();
+         assertThatThrownBy(() -> new CdnOriginCheck.HttpFetcher().fetch(InetAddress.getByName("127.0.0.1"), server.getLocalPort(), "localhost", "/", java.time.Duration.ofSeconds(2)))
+            .isInstanceOf(IOException.class);
+         long seconds = (System.nanoTime() - start) / 1_000_000_000L;
+         assertThat(seconds).as("gave up at about the 2 second deadline").isLessThan(6);
+      }
+   }
+
+
+
+   /*******************************************************************************
+    ** A port is stripped from name:port and [v6]:port, never from a bare IPv6 literal.
+    *******************************************************************************/
+   @Test
+   void stripsPortsOnlyWhenThereIsOne()
+   {
+      assertThat(CdnOriginCheck.stripPort("origin.example.com:443")).isEqualTo("origin.example.com");
+      assertThat(CdnOriginCheck.stripPort("origin.example.com")).isEqualTo("origin.example.com");
+      assertThat(CdnOriginCheck.stripPort("[2606:4700::1111]:443")).isEqualTo("2606:4700::1111");
+      assertThat(CdnOriginCheck.stripPort("2606:4700::1111")).isEqualTo("2606:4700::1111");
+      assertThat(CdnOriginCheck.stripPort("2606:4700:4700::1")).isEqualTo("2606:4700:4700::1");
+   }
+
+
+
+   /*******************************************************************************
+    ** Hex to 16 bytes.
+    *******************************************************************************/
+   private static byte[] bytes(String hex)
+   {
+      assertThat(hex).hasSize(32);
+      byte[] out = new byte[16];
+      for(int i = 0; i < 16; i++)
+      {
+         out[i] = (byte) Integer.parseInt(hex.substring(i * 2, i * 2 + 2), 16);
+      }
+      return (out);
+   }
+
+
+
+   /*******************************************************************************
     ** One bad address in a name's answer refuses the whole name, and the address
     ** used is one that was checked (the first).
     *******************************************************************************/
