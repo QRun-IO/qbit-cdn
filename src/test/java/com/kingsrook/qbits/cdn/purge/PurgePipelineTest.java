@@ -17,12 +17,11 @@
 package com.kingsrook.qbits.cdn.purge;
 
 
-import java.net.http.HttpClient;
 import java.util.List;
 import com.kingsrook.qbits.cdn.CdnRuntime;
-import com.kingsrook.qbits.cdn.CdnTestSupport;
 import com.kingsrook.qbits.cdn.CdnTestSupport.FakePathProvider;
 import com.kingsrook.qbits.cdn.CdnTestSupport.FakeTagProvider;
+import com.kingsrook.qbits.cdn.CdnTestSupport;
 import com.kingsrook.qbits.cdn.model.CdnTables;
 import com.kingsrook.qbits.cdn.spi.CdnException;
 import com.kingsrook.qbits.cdn.spi.CdnProviderType;
@@ -46,7 +45,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
  *******************************************************************************/
 class PurgePipelineTest
 {
-   private final CdnPurgeDispatcher dispatcher = new CdnPurgeDispatcher(new RevalidationHookRunner(HttpClient.newHttpClient(), name -> null, host -> List.of()));
+   private final CdnPurgeDispatcher dispatcher = new CdnPurgeDispatcher(new RevalidationHookRunner(name -> null, host -> List.of()));
 
 
 

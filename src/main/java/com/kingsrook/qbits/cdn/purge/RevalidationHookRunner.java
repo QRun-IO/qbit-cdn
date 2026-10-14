@@ -21,16 +21,18 @@ import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import java.net.InetAddress;
 import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
-import java.util.ArrayList;
+import java.time.Instant;
+import java.util.Arrays;
 import java.util.HexFormat;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 import java.util.function.Function;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.kingsrook.qbits.cdn.model.CdnSignatureFormat;
 import com.kingsrook.qbits.cdn.model.CdnTables;
 import com.kingsrook.qqq.backend.core.actions.tables.QueryAction;
 import com.kingsrook.qqq.backend.core.exceptions.QException;
@@ -41,17 +43,20 @@ import com.kingsrook.qqq.backend.core.model.actions.tables.query.QueryInput;
 import com.kingsrook.qqq.backend.core.model.data.QRecord;
 import com.kingsrook.qqq.backend.core.utils.StringUtils;
 import com.kingsrook.qqq.backend.core.utils.ValueUtils;
+import com.kingsrook.qqq.backend.core.utils.http.SafeHttpClient;
+import com.kingsrook.qqq.backend.core.utils.http.SafeHttpPolicy;
+import com.kingsrook.qqq.backend.core.utils.webhooks.WebhookSecret;
+import com.kingsrook.qqq.backend.core.utils.webhooks.WebhookSigner;
 
 
 /*******************************************************************************
  ** Calls every enabled cdn_revalidation_hook before the CDN is purged, so the
  ** edge never refetches a stale page (design spec section 4.5 step 3).
  **
- ** Request: POST {"tags":[...]} with header
- ** "X-Revalidate-Signature: sha256=<hex HMAC-SHA256 of the body>", keyed by
- ** the secret in the environment variable the hook's secretRef names. With
- ** fanOutDns, the hook's host is resolved and every address is called (one
- ** per pod behind a headless Service). Every call must answer 2xx.
+ ** Request: POST {"tags":[...]} signed with core Standard Webhooks headers.
+ ** LEGACY keeps X-Revalidate-Signature with a hex HMAC of the body. The
+ ** secretRef names an environment variable. SafeHttpClient checks and pins
+ ** every address; fan-out preserves the original Host and TLS server name.
  *******************************************************************************/
 public class RevalidationHookRunner
 {
@@ -59,9 +64,8 @@ public class RevalidationHookRunner
 
    private static final ObjectMapper JSON = new ObjectMapper();
 
-   private final HttpClient                http;
-   private final Function<String, String>  secrets;
-   private final Resolver                  resolver;
+   private final Function<String, String> secrets;
+   private final Resolver                 resolver;
 
 
 
@@ -83,7 +87,7 @@ public class RevalidationHookRunner
     *******************************************************************************/
    public RevalidationHookRunner()
    {
-      this(HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build(), System::getenv,
+      this(System::getenv,
          host -> java.util.Arrays.stream(InetAddress.getAllByName(host)).map(InetAddress::getHostAddress).toList());
    }
 
@@ -92,9 +96,8 @@ public class RevalidationHookRunner
    /*******************************************************************************
     ** Constructor with collaborators.
     *******************************************************************************/
-   public RevalidationHookRunner(HttpClient http, Function<String, String> secrets, Resolver resolver)
+   public RevalidationHookRunner(Function<String, String> secrets, Resolver resolver)
    {
-      this.http = http;
       this.secrets = secrets;
       this.resolver = resolver;
    }
@@ -133,42 +136,63 @@ public class RevalidationHookRunner
          byte[] body = JSON.writeValueAsBytes(java.util.Map.of("tags", tags));
          String secretRef = hook.getValueString("secretRef");
          String secret = StringUtils.hasContent(secretRef) ? secrets.apply(secretRef) : null;
+         String formatValue = hook.getValueString("signatureFormat");
+         CdnSignatureFormat format = formatValue == null ? CdnSignatureFormat.LEGACY : CdnSignatureFormat.valueOf(formatValue);
+         WebhookSecret signingSecret = secret != null && format == CdnSignatureFormat.STANDARD_WEBHOOKS ? WebhookSecret.parse(secret) : null;
+         String messageId = UUID.randomUUID().toString();
          URI uri = URI.create(hook.getValueString("url"));
-         List<URI> targets = new ArrayList<>();
-         if(Boolean.TRUE.equals(ValueUtils.getValueAsBoolean(hook.getValue("fanOutDns"))))
+         Integer timeout = ValueUtils.getValueAsInteger(hook.getValue("timeoutMs"));
+         if(timeout != null && timeout <= 0)
          {
-            for(String address : resolver.resolve(uri.getHost()))
-            {
-               String host = address.contains(":") ? "[" + address + "]" : address;
-               targets.add(new URI(uri.getScheme(), null, host, uri.getPort(), uri.getPath(), uri.getQuery(), null));
-            }
+            throw (new QException("Revalidation hook timeoutMs must be positive"));
          }
-         else
+         String allowlist = hook.getValueString("internalAllowlist");
+         SafeHttpPolicy policy = SafeHttpPolicy.defaults()
+            .withAllowPlainHttp(Boolean.TRUE.equals(ValueUtils.getValueAsBoolean(hook.getValue("allowPlainHttp"))))
+            .withInternalAllowlist(allowlist == null ? List.of() : Arrays.asList(allowlist.split("[,\\s]+")))
+            .withTotalTimeout(Duration.ofMillis(timeout == null ? 5000 : timeout));
+         List<String> resolved = resolver.resolve(uri.getHost());
+         InetAddress[] addresses = new InetAddress[resolved.size()];
+         for(int i = 0; i < resolved.size(); i++)
          {
-            targets.add(uri);
+            addresses[i] = InetAddress.getByName(resolved.get(i));
          }
-         if(targets.isEmpty())
+         if(addresses.length == 0)
          {
             throw (new QException("Revalidation hook " + name + " resolved to no addresses"));
          }
-         Integer timeout = ValueUtils.getValueAsInteger(hook.getValue("timeoutMs"));
-         for(URI target : targets)
+         try(SafeHttpClient validator = new SafeHttpClient(policy, host -> addresses))
          {
-            HttpRequest.Builder request = HttpRequest.newBuilder(target)
-               .timeout(Duration.ofMillis(timeout == null ? 5000 : timeout))
-               .header("Content-Type", "application/json")
-               .POST(HttpRequest.BodyPublishers.ofByteArray(body));
+            validator.checkUrl(uri.toString());
+         }
+         boolean fanOut = Boolean.TRUE.equals(ValueUtils.getValueAsBoolean(hook.getValue("fanOutDns")));
+         int calls = fanOut ? addresses.length : 1;
+         for(int i = 0; i < calls; i++)
+         {
+            InetAddress[] targetAddresses = fanOut ? new InetAddress[] {addresses[i]} : addresses;
+            Map<String, String> headers = new LinkedHashMap<>();
+            headers.put("Content-Type", "application/json");
             if(secret != null)
             {
-               request.header(SIGNATURE_HEADER, "sha256=" + sign(secret, body));
+               if(format == CdnSignatureFormat.LEGACY)
+               {
+                  headers.put(SIGNATURE_HEADER, "sha256=" + sign(secret, body));
+               }
+               else
+               {
+                  headers.putAll(WebhookSigner.headers(messageId, Instant.now(), body, List.of(signingSecret)));
+               }
             }
-            HttpResponse<String> response = http.send(request.build(), HttpResponse.BodyHandlers.ofString());
-            if(response.statusCode() / 100 != 2)
+            try(SafeHttpClient client = new SafeHttpClient(policy, host -> targetAddresses))
             {
-               throw (new QException("Revalidation hook " + name + " answered " + response.statusCode() + " from " + target.getHost()));
+               int status = client.post(uri.toString(), headers, body).statusCode();
+               if(status / 100 != 2)
+               {
+                  throw (new QException("Revalidation hook " + name + " answered " + status + " from " + uri.getHost()));
+               }
             }
          }
-         return (targets.size());
+         return (calls);
       }
       catch(QException e)
       {
@@ -188,7 +212,7 @@ public class RevalidationHookRunner
 
 
    /*******************************************************************************
-    ** Hex HMAC-SHA256.
+    ** Legacy compatibility: hex HMAC-SHA256 over the body with raw UTF-8 key bytes.
     *******************************************************************************/
    public static String sign(String secret, byte[] body) throws Exception
    {
