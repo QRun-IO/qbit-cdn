@@ -20,10 +20,13 @@ package com.kingsrook.qbits.cdn;
 import java.util.ArrayList;
 import java.util.List;
 import com.kingsrook.qbits.cdn.app.CdnWidgets;
+import com.kingsrook.qbits.cdn.health.CdnProviderHealthChecks;
 import com.kingsrook.qbits.cdn.model.CdnTables;
 import com.kingsrook.qbits.cdn.processes.CdnProcesses;
 import com.kingsrook.qbits.cdn.purge.CdnRecordChangeListener;
 import com.kingsrook.qqq.backend.core.exceptions.QException;
+import com.kingsrook.qqq.backend.core.health.HealthCheckSupplierMetaData;
+import com.kingsrook.qqq.backend.core.health.HealthChecksMetaData;
 import com.kingsrook.qqq.backend.core.model.metadata.MetaDataProducerMultiOutput;
 import com.kingsrook.qqq.backend.core.model.metadata.QInstance;
 import com.kingsrook.qqq.backend.core.model.metadata.code.QCodeReference;
@@ -160,6 +163,8 @@ public class CdnQBitProducer implements QBitMetaDataProducer<CdnQBitConfig>
       }
       output.add(CdnWidgets.app(qBitConfig, tables));
       output.addSelfToInstance(qInstance);
+      HealthChecksMetaData.ofOrWithNew(qInstance).withSupplier(new HealthCheckSupplierMetaData()
+         .withNamePrefix("cdn.provider").withComponent("cdn").withSupplier(new QCodeReference(CdnProviderHealthChecks.class)));
 
       if(!qBitConfig.getPurgeableTables().isEmpty())
       {
