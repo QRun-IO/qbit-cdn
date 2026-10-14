@@ -61,14 +61,14 @@ public record CdnHomeData(List<ProviderView> providers, List<HostnameView> hostn
     ** A provider row as shown.
     *******************************************************************************/
    public record ProviderView(Integer id, String name, String type, String distributionId, String dnsTarget, String originHost,
-                              String lastHealthStatus, String lastHealthMessage, Instant lastSuccessfulTest, Long credentialAgeDays)
+                              String lastHealthStatus, String lastHealthMessage, Instant lastSuccessfulTest, Long credentialAgeDays, Boolean enabled)
    {
       /*******************************************************************************
        ** Whether this is a real CDN (not the NONE placeholder).
        *******************************************************************************/
       public boolean isConnected()
       {
-         return (!CdnProviderType.NONE.name().equals(type));
+         return (Boolean.TRUE.equals(enabled) && !CdnProviderType.NONE.name().equals(type));
       }
    }
 
@@ -119,7 +119,7 @@ public record CdnHomeData(List<ProviderView> providers, List<HostnameView> hostn
          LocalDate rotated = ValueUtils.getValueAsLocalDate(row.getValue("credentialRotatedDate"));
          providers.add(new ProviderView(id, row.getValueString("name"), row.getValueString("providerType"), row.getValueString("zoneOrDistributionId"),
             row.getValueString("dnsTarget"), row.getValueString("originHost"), row.getValueString("lastHealthStatus"), row.getValueString("lastHealthMessage"),
-            ValueUtils.getValueAsInstant(row.getValue("lastSuccessfulTestDate")), rotated == null ? null : ChronoUnit.DAYS.between(rotated, today)));
+            ValueUtils.getValueAsInstant(row.getValue("lastSuccessfulTestDate")), rotated == null ? null : ChronoUnit.DAYS.between(rotated, today), row.getValueBoolean("enabled")));
          if(CdnProviderType.CLOUDFRONT.name().equals(row.getValueString("providerType")))
          {
             PathPlannerSettings settings = PathPlannerSettings.from(CdnPurgeDispatcher.configOf(row));

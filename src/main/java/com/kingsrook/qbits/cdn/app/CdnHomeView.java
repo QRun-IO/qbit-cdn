@@ -80,7 +80,7 @@ public final class CdnHomeView
       String text = "All CDN checks are OK.";
       if("NOT_CONNECTED".equals(state))
       {
-         text = "No CDN connected yet.";
+         text = "No CDN provider configured: purges are recorded only.";
       }
       else if("ATTENTION".equals(state))
       {
@@ -99,7 +99,7 @@ public final class CdnHomeView
       open(html, "Connection");
       if(!data.isConnected())
       {
-         empty(html, "No CDN connected yet. The CloudFront distribution is created in the cutover window.");
+         empty(html, "No CDN provider configured: purges are recorded only. The CloudFront distribution is created in the cutover window.");
       }
       for(CdnHomeData.ProviderView provider : data.providers())
       {
@@ -182,6 +182,7 @@ public final class CdnHomeView
             Instant created = ValueUtils.getValueAsInstant(row.getValue("createDate"));
             html.append("<li><a href=\"").append(esc(appPath + "/" + CdnTables.PURGE_REQUEST + "/" + row.getValue("id"))).append("\">#")
                .append(esc(String.valueOf(row.getValue("id")))).append("</a> ").append(esc(row.getValueString("status")))
+               .append(data.isConnected() ? "" : " - recorded only (not sent)")
                .append(created == null ? "" : ", " + WHEN.format(created)).append("</li>");
          }
          html.append("</ul>");
@@ -224,7 +225,7 @@ public final class CdnHomeView
       open(html, "Origin headers");
       if(data.originChecks().isEmpty())
       {
-         empty(html, "No origin header check has run yet.");
+         empty(html, "Origin header checks are not run by this version; nothing has been checked.");
       }
       for(QRecord check : data.originChecks())
       {
