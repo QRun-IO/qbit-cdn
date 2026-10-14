@@ -231,7 +231,8 @@ public final class CdnTables
          .withRecordLabelFormatAndFields("%s", "hostname")
          .withField(new QFieldMetaData("hostname", QFieldType.STRING).withIsRequired(true).withMaxLength(255))
          .withField(new QFieldMetaData("cdnProviderId", QFieldType.INTEGER).withIsRequired(true).withPossibleValueSourceName(PROVIDER))
-         .withField(new QFieldMetaData("hostnameRole", QFieldType.STRING).withMaxLength(20))
+         .withField(new QFieldMetaData("hostnameRole", QFieldType.STRING).withMaxLength(20)
+            .withHelpContent(new QHelpContent("A label for your own reference (for example WEB, API or ASSETS). It is not used to change any behavior.")))
          .withField(new QFieldMetaData("stage", QFieldType.STRING).withIsRequired(true).withPossibleValueSourceName(PVS_STAGE).withDefaultValue(CdnHostnameStage.OFF.name()))
          .withField(new QFieldMetaData("purgeEnabled", QFieldType.BOOLEAN).withDefaultValue(true))
          .withField(new QFieldMetaData("notes", QFieldType.TEXT)));

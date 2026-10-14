@@ -61,6 +61,7 @@ public final class CdnHomeView
    {
       StringBuilder html = new StringBuilder("<div class=\"cdn-home\" style=\"" + GRID + "\">");
       connection(html, data, appPath);
+      setup(html, data, appPath);
       performance(html, data);
       purges(html, data, appPath);
       budget(html, data);
@@ -218,6 +219,50 @@ public final class CdnHomeView
 
 
    /*******************************************************************************
+    ** The Setup card: each configuration table, whether it is set up, and the next
+    ** step, linked to its table.
+    *******************************************************************************/
+   private static void setup(StringBuilder html, CdnHomeData data, String appPath)
+   {
+      if(data.setup() == null || data.setup().isEmpty())
+      {
+         return;
+      }
+      open(html, "Setup");
+      long todo = data.setup().stream().filter(i -> i.state() == CdnSetupStatus.State.TODO).count();
+      html.append("<p>").append(todo == 0 ? "Everything the CDN needs is set up." : esc(todo + (todo == 1 ? " item needs" : " items need") + " attention.")).append("</p><ul style=\"list-style:none;margin:0;padding:0;\">");
+      for(CdnSetupStatus.Item item : data.setup())
+      {
+         String color = switch(item.state())
+         {
+            case OK -> "#16a34a";
+            case TODO -> "#dc2626";
+            case DEFAULT -> "#d97706";
+            case OPTIONAL -> "#9ca3af";
+         };
+         String label = switch(item.state())
+         {
+            case OK -> "Set up";
+            case TODO -> "Needs setup";
+            case DEFAULT -> "Using defaults";
+            case OPTIONAL -> "Optional";
+         };
+         html.append("<li style=\"margin:0 0 .75rem;\"><strong><a href=\"").append(esc(appPath + "/" + item.tableName())).append("\">").append(esc(item.label())).append("</a></strong> ")
+            .append("<span style=\"white-space:nowrap;\"><span aria-hidden=\"true\" style=\"width:.55rem;height:.55rem;border-radius:50%;background:").append(color)
+            .append(";display:inline-block;\"></span> ").append(esc(label)).append("</span><div>").append(esc(item.detail())).append("</div>");
+         if(item.nextStep() != null)
+         {
+            html.append("<div style=\"").append(MUTED).append("\">Next: ").append(esc(item.nextStep())).append("</div>");
+         }
+         html.append("</li>");
+      }
+      html.append("</ul>");
+      close(html);
+   }
+
+
+
+   /*******************************************************************************
     ** Origin header card.
     *******************************************************************************/
    private static void origin(StringBuilder html, CdnHomeData data)
@@ -225,7 +270,7 @@ public final class CdnHomeView
       open(html, "Origin headers");
       if(data.originChecks().isEmpty())
       {
-         empty(html, "Origin header checks are not run by this version; nothing has been checked.");
+         empty(html, "No origin check yet. Run Check Origin Headers on Hostnames; hostnames that are not Off are also checked every night.");
       }
       for(QRecord check : data.originChecks())
       {

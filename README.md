@@ -31,6 +31,10 @@ Design: QRun-IO/qqq `docs/specs/2026-10-12-qbit-cdn-design.md`.
   NONE. See `docs/cloudfront-expected-config.md`.
 - **Permissions:** `cdn.view`, `cdn.purge`, `cdn.purgeAll`, `cdn.admin`.
 
+## Setup
+
+This qbit ships no DDL and seeds nothing from a changelog (a host chooses its own column names). Open the CDN app: the Setup card lists each part with the next step. On a fresh install run **Create default provider** (No CDN: purges are recorded, nothing is sent), **Create default rules** (tags for every purgeable table), and optionally **Create default policies** (two turned-off examples). Add your CDN and hostnames when you have them. Cache policies change a response only where the application calls `CdnResponseHeaderPolicy.decide`. **Check Origin Headers** on a hostname (and the nightly run) asks the origin, the provider's `originHost` when set, for the home page, prefix policy paths and literal tag-rule paths, and records how many have the right Cache-Control.
+
 ## Tag rules
 
 `cdn_table_tag_rule.onlyWhenFieldsChange` is a comma-separated list of QQQ field

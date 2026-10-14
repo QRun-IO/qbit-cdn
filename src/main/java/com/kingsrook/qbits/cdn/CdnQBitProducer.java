@@ -149,6 +149,8 @@ public class CdnQBitProducer implements QBitMetaDataProducer<CdnQBitConfig>
       }
       List<QProcessMetaData> processes = new ArrayList<>(CdnProcesses.processes(qBitConfig));
       processes.addAll(com.kingsrook.qbits.cdn.processes.CdnProviderProcesses.processes(qBitConfig));
+      processes.addAll(com.kingsrook.qbits.cdn.processes.CdnOriginCheckProcesses.processes(qBitConfig));
+      processes.addAll(com.kingsrook.qbits.cdn.processes.CdnDefaultsProcesses.processes());
       for(QProcessMetaData process : processes)
       {
          process.setSourceQBitName(qBit.getName());
@@ -160,6 +162,7 @@ public class CdnQBitProducer implements QBitMetaDataProducer<CdnQBitConfig>
       }
       output.add(CdnWidgets.app(qBitConfig, tables));
       output.addSelfToInstance(qInstance);
+      com.kingsrook.qbits.cdn.model.CdnHelp.apply(qInstance, qBitConfig.getAppName());
 
       if(!qBitConfig.getPurgeableTables().isEmpty())
       {
