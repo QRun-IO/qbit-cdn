@@ -25,11 +25,26 @@ Design: QRun-IO/qqq `docs/specs/2026-10-12-qbit-cdn-design.md`.
   Purge Everything, Test Connection, Import Edge Stats, Check Config Drift;
   scheduled: dispatcher, daily stats import, daily drift check.
 - **Admin -> CDN app:** sections Connection / Settings / Activity / Performance,
-  a home widget with honest empty states, and a Health status card.
+  a home widget with honest empty states.
 - **Providers:** CloudFront (invalidations, connection test, CloudWatch stats,
   drift against the OpenTofu `expected_config`), Souin (self-hosted, tags),
   NONE. See `docs/cloudfront-expected-config.md`.
 - **Permissions:** `cdn.view`, `cdn.purge`, `cdn.purgeAll`, `cdn.admin`.
+
+## Health checks
+
+Central System Health registers `cdn.provider.<id>` for each enabled
+`cdn_provider` row: **DEPENDENCY**, component `cdn`, category **CDN**, every
+**900 seconds**, with a **20000 ms** timeout. It reuses the read-only connection
+test: failure is DOWN; success without the origin header is DEGRADED; otherwise
+UP. Providers without connection-test support report UNKNOWN. Disable a check
+centrally with `health_check.enabled`.
+
+Details contain only provider type, a known provider status (or UNKNOWN), and
+whether the origin header is configured. The manual `cdnTestConnection` action
+and its `lastHealth*` fields remain; the daily scheduled step checks drift only.
+The host must use a QQQ build containing the central health SPI (currently the
+locally installed `4.1.0-SNAPSHOT`).
 
 ## Tag rules
 
@@ -120,7 +135,7 @@ with purging enabled. Purge From CDN, Purge Everything, and Retry Purge show a
 Review warning and a recorded-only Result when sending is unavailable. Requests
 for enabled providers remain visible with `SKIPPED_NONE_PROVIDER` or
 `SKIPPED_STAGE_OFF`; with no enabled provider, no new request row is created.
-The home Connection and Health cards explain the unconfigured state, and purge
+The home Connection card explains the unconfigured state, and purge
 activity labels recorded-only requests when disconnected.
 
 This version does not run origin header checks. The Origin headers card says
