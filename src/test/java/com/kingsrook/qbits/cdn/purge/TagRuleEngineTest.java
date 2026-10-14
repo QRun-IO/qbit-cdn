@@ -136,6 +136,67 @@ class TagRuleEngineTest
 
 
    /*******************************************************************************
+    ** Ignore-only rules compare actual values after merging partial updates.
+    *******************************************************************************/
+   @Test
+   void ignoresCounterOnlyUpdates() throws Exception
+   {
+      QRecord rule = new QRecord().withValue("onlyWhenFieldsChange", " !viewCount, !lastIndexedAt ").withValue("tagTemplates", "post:{id}");
+      QRecord old = new QRecord().withValue("id", 1).withValue("title", "Old").withValue("viewCount", 10).withValue("lastIndexedAt", "yesterday");
+      TagRuleEngine engine = new TagRuleEngine();
+      assertTrue(engine.evaluate(rule, List.of(new QRecord(old)), List.of(old)).isEmpty());
+      assertTrue(engine.evaluate(rule, List.of(new QRecord().withValue("id", 1).withValue("viewCount", 11).withValue("lastIndexedAt", "today")), List.of(old)).isEmpty());
+      assertTrue(engine.evaluate(rule, List.of(new QRecord().withValue("id", 1).withValue("title", "Old")), List.of(old)).isEmpty());
+      assertThat(engine.evaluate(rule, List.of(new QRecord().withValue("id", 1).withValue("title", "New").withValue("viewCount", 11)), List.of(old)).tags()).containsExactly("post:1");
+      assertFalse(engine.evaluate(rule, List.of(new QRecord().withValue("id", 1).withValue("title", null)), List.of(old)).isEmpty());
+      assertFalse(engine.evaluate(rule, List.of(new QRecord().withValue("id", 1).withValue("newField", "value")), List.of(old)).isEmpty());
+      assertFalse(engine.evaluate(rule, List.of(new QRecord().withValue("id", 1).withValue("ViewCount", 11)), List.of(old)).isEmpty());
+   }
+
+
+
+   /*******************************************************************************
+    ** Plain lists retain allow-list behavior; ignored entries always win.
+    *******************************************************************************/
+   @Test
+   void appliesAllowListAndMixedRules()
+   {
+      QRecord old = new QRecord().withValue("title", "Old").withValue("viewCount", 10);
+      QRecord counterChange = new QRecord(old).withValue("viewCount", 11);
+      QRecord titleChange = new QRecord(old).withValue("title", "New");
+      QRecord rule = new QRecord().withValue("onlyWhenFieldsChange", " title, ,slug ");
+      assertFalse(TagRuleEngine.counts(rule, counterChange, old));
+      assertTrue(TagRuleEngine.counts(rule, titleChange, old));
+      assertFalse(TagRuleEngine.counts(rule, new QRecord(old), old));
+      rule.setValue("onlyWhenFieldsChange", "title, viewCount, !viewCount");
+      assertFalse(TagRuleEngine.counts(rule, counterChange, old));
+      assertTrue(TagRuleEngine.counts(rule, titleChange, old));
+      assertFalse(TagRuleEngine.counts(rule, new QRecord(old).withValue("slug", "new"), old));
+      rule.setValue("onlyWhenFieldsChange", "viewCount,!viewCount");
+      assertFalse(TagRuleEngine.counts(rule, titleChange, old));
+      assertFalse(TagRuleEngine.counts(rule, counterChange, old));
+   }
+
+
+
+   /*******************************************************************************
+    ** Changed-field filters never suppress inserts or deletes.
+    *******************************************************************************/
+   @Test
+   void insertsAndDeletesIgnoreFieldFilters() throws Exception
+   {
+      QRecord post = new QRecord().withValue("id", 1).withValue("viewCount", 10);
+      for(String fields : List.of("!viewCount", "title", "title,!viewCount"))
+      {
+         QRecord rule = new QRecord().withValue("onlyWhenFieldsChange", fields).withValue("tagTemplates", "post:{id}");
+         assertThat(new TagRuleEngine().evaluate(rule, List.of(post), List.of()).tags()).containsExactly("post:1");
+         assertThat(new TagRuleEngine().evaluate(rule, List.of(), List.of(post)).tags()).containsExactly("post:1");
+      }
+   }
+
+
+
+   /*******************************************************************************
     ** Stored text round-trips; invalid lines are dropped.
     *******************************************************************************/
    @Test

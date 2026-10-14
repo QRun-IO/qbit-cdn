@@ -28,11 +28,14 @@ import com.kingsrook.qbits.cdn.spi.CdnProviderType;
 import com.kingsrook.qbits.cdn.spi.CdnPurgeKind;
 import com.kingsrook.qqq.backend.core.actions.tables.QueryAction;
 import com.kingsrook.qqq.backend.core.actions.tables.UpdateAction;
+import com.kingsrook.qqq.backend.core.context.QContext;
 import com.kingsrook.qqq.backend.core.model.actions.tables.query.QFilterOrderBy;
 import com.kingsrook.qqq.backend.core.model.actions.tables.query.QQueryFilter;
 import com.kingsrook.qqq.backend.core.model.actions.tables.query.QueryInput;
 import com.kingsrook.qqq.backend.core.model.actions.tables.update.UpdateInput;
 import com.kingsrook.qqq.backend.core.model.data.QRecord;
+import com.kingsrook.qqq.backend.core.model.metadata.fields.QFieldMetaData;
+import com.kingsrook.qqq.backend.core.model.metadata.fields.QFieldType;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -134,6 +137,32 @@ class PurgePipelineTest
       assertThat(FakePathProvider.SENT).hasSize(1);
       assertThat(FakePathProvider.SENT.get(0).items()).contains("/blog/quick-bits/a*", "/blog/quick-bits/b*");
       assertThat(purges()).extracting(row -> row.getValueString("status")).containsExactly("SUCCEEDED", "MERGED");
+   }
+
+
+
+   /*******************************************************************************
+    ** The record-change listener skips counter updates but records title changes.
+    *******************************************************************************/
+   @Test
+   void ignoredCounterChangeRecordsNoPurge() throws Exception
+   {
+      QContext.getQInstance().getTable("post").withField(new QFieldMetaData("viewCount", QFieldType.INTEGER));
+      CdnTestSupport.liveProvider(CdnProviderType.CLOUDFRONT, null);
+      QRecord rule = new QueryAction().execute(new QueryInput(CdnTables.TABLE_TAG_RULE)).getRecords().get(0);
+      new UpdateAction().execute(new UpdateInput(CdnTables.TABLE_TAG_RULE).withRecord(new QRecord().withValue("id", rule.getValue("id"))
+         .withValue("onlyWhenFieldsChange", "!viewCount")));
+      QRecord post = CdnTestSupport.insert("post", new QRecord().withValue("slug", "counter-post").withValue("title", "Old")
+         .withValue("blogId", 1).withValue("isPublished", true).withValue("viewCount", 10)).get(0);
+      assertThat(purges()).hasSize(1);
+
+      new UpdateAction().execute(new UpdateInput("post").withRecord(new QRecord().withValue("id", post.getValue("id")).withValue("viewCount", 11)));
+      assertThat(purges()).as("counter-only update adds no purge request").hasSize(1);
+
+      new UpdateAction().execute(new UpdateInput("post").withRecord(new QRecord().withValue("id", post.getValue("id")).withValue("title", "New")));
+      assertThat(purges()).hasSize(2);
+      assertThat(purges().get(1).getValueString("paths")).contains("/blog/quick-bits/counter-post*");
+      assertThat(purges().get(1).getValueString("tags")).contains("post:" + post.getValue("id"));
    }
 
 
