@@ -58,10 +58,10 @@ class CdnHomeTest
    {
       CdnTestSupport.setUp();
       String html = render(CdnWidgets.HOME_WIDGET);
-      assertThat(html).contains("No CDN connected yet.").contains("No edge statistics yet.").contains("No purges recorded yet.")
-         .contains("No path-billed provider connected yet.").contains("No origin header check has run yet.").contains("Nothing to compare yet.")
+      assertThat(html).contains("No CDN provider configured: purges are recorded only.").contains("No edge statistics yet.").contains("No purges recorded yet.")
+         .contains("No path-billed provider connected yet.").contains("Origin header checks are not run by this version; nothing has been checked.").contains("Nothing to compare yet.")
          .contains("minmax(min(100%,22rem),1fr)");
-      assertThat(render(CdnWidgets.HEALTH_CARD_WIDGET)).contains("No CDN connected yet.").contains("href=\"/cdnAdmin\"");
+      assertThat(render(CdnWidgets.HEALTH_CARD_WIDGET)).contains("No CDN provider configured: purges are recorded only.").contains("href=\"/cdnAdmin\"");
    }
 
 
@@ -99,7 +99,7 @@ class CdnHomeTest
       String html = CdnHomeView.render(data, "/cdnAdmin");
       assertThat(html).contains("d1.cloudfront.net").contains(age + " days (rotate every 90) - rotation due").contains("1,500").contains("91.5%")
          .contains("<polyline").contains("396 of 396").contains("BEHAVIOR").contains("1 open").contains("/cdnAdmin/cdn_purge_request/")
-         .contains("www.example.com");
+         .contains("www.example.com").doesNotContain("recorded only (not sent)", "nothing has been checked");
       assertThat(CdnHomeView.renderHealthCard(data, "/cdnAdmin")).contains("Needs attention");
    }
 
@@ -119,4 +119,31 @@ class CdnHomeTest
       assertEquals("50.0%", CdnHomeView.percent(new BigDecimal("0.5")));
       assertEquals("91.5%", CdnHomeView.percent(new BigDecimal("91.5")));
    }
+
+
+
+   /*******************************************************************************
+    ** NONE and disabled providers do not imply a connection or a sent purge.
+    *******************************************************************************/
+   @Test
+   void recordedOnlyHome() throws Exception
+   {
+      for(boolean none : List.of(true, false))
+      {
+         CdnTestSupport.setUp();
+         Integer provider = CdnTestSupport.liveProvider(none ? CdnProviderType.NONE : CdnProviderType.CLOUDFRONT, null);
+         if(!none)
+         {
+            new com.kingsrook.qqq.backend.core.actions.tables.UpdateAction().execute(
+               new com.kingsrook.qqq.backend.core.model.actions.tables.update.UpdateInput(CdnTables.PROVIDER)
+                  .withRecord(new QRecord().withValue("id", provider).withValue("enabled", false)));
+         }
+         CdnTestSupport.insert(CdnTables.PURGE_REQUEST, new QRecord().withValue("cdnProviderId", provider).withValue("status", "SKIPPED_NONE_PROVIDER"));
+         assertThat(render(CdnWidgets.HOME_WIDGET)).contains("No CDN provider configured: purges are recorded only.")
+            .contains("The CloudFront distribution is created in the cutover window.").contains("recorded only (not sent)")
+            .contains("Origin header checks are not run by this version; nothing has been checked.");
+         assertThat(render(CdnWidgets.HEALTH_CARD_WIDGET)).contains("No CDN provider configured: purges are recorded only.");
+      }
+   }
+
 }
