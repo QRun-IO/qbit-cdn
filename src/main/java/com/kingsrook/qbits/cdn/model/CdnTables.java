@@ -24,6 +24,7 @@ import com.kingsrook.qbits.cdn.spi.CdnProviderType;
 import com.kingsrook.qqq.backend.core.model.metadata.code.QCodeReference;
 import com.kingsrook.qqq.backend.core.model.metadata.fields.QFieldMetaData;
 import com.kingsrook.qqq.backend.core.model.metadata.fields.QFieldType;
+import com.kingsrook.qqq.backend.core.model.metadata.help.QHelpContent;
 import com.kingsrook.qqq.backend.core.model.metadata.layout.QIcon;
 import com.kingsrook.qqq.backend.core.model.metadata.permissions.PermissionLevel;
 import com.kingsrook.qqq.backend.core.model.metadata.permissions.QPermissionRules;
@@ -273,7 +274,8 @@ public final class CdnTables
          .withField(new QFieldMetaData("tableName", QFieldType.STRING).withIsRequired(true).withMaxLength(100))
          .withField(new QFieldMetaData("tagTemplates", QFieldType.TEXT))
          .withField(new QFieldMetaData("invalidationPaths", QFieldType.TEXT))
-         .withField(new QFieldMetaData("onlyWhenFieldsChange", QFieldType.STRING).withMaxLength(1000))
+         .withField(new QFieldMetaData("onlyWhenFieldsChange", QFieldType.STRING).withMaxLength(1000)
+            .withHelpContent(new QHelpContent("Comma-separated, case-sensitive field names. Plain entries allow only those changes; !viewCount ignores viewCount changes. With only ignored entries, any other changed field counts. In mixed lists, ignored fields never count. Inserts and deletes are unaffected by this filter.")))
          .withField(new QFieldMetaData("publishedField", QFieldType.STRING).withMaxLength(100))
          .withField(new QFieldMetaData("enabled", QFieldType.BOOLEAN).withDefaultValue(true)));
    }
