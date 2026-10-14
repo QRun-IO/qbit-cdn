@@ -59,7 +59,7 @@ class CdnHomeTest
       CdnTestSupport.setUp();
       String html = render(CdnWidgets.HOME_WIDGET);
       assertThat(html).contains("No CDN provider configured: purges are recorded only.").contains("No edge statistics yet.").contains("No purges recorded yet.")
-         .contains("No path-billed provider connected yet.").contains("Origin header checks are not run by this version; nothing has been checked.").contains("Nothing to compare yet.")
+         .contains("No path-billed provider connected yet.").contains("No origin check yet.").contains("Nothing to compare yet.")
          .contains("minmax(min(100%,22rem),1fr)");
       assertThat(render(CdnWidgets.HEALTH_CARD_WIDGET)).contains("No CDN provider configured: purges are recorded only.").contains("href=\"/cdnAdmin\"");
    }
@@ -141,7 +141,7 @@ class CdnHomeTest
          CdnTestSupport.insert(CdnTables.PURGE_REQUEST, new QRecord().withValue("cdnProviderId", provider).withValue("status", "SKIPPED_NONE_PROVIDER"));
          assertThat(render(CdnWidgets.HOME_WIDGET)).contains("No CDN provider configured: purges are recorded only.")
             .contains("The CloudFront distribution is created in the cutover window.").contains("recorded only (not sent)")
-            .contains("Origin header checks are not run by this version; nothing has been checked.");
+            .contains("No origin check yet.");
          assertThat(render(CdnWidgets.HEALTH_CARD_WIDGET)).contains("No CDN provider configured: purges are recorded only.");
       }
    }

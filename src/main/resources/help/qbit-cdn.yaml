@@ -1,0 +1,58 @@
+bundle: qbit-cdn
+version: 1
+layer: QBIT
+# Help for the CDN app and every cdn_* table, in the QQQ help-bundle format
+# (qqq#1198). Each table entry says what the table is for and how its rows get
+# created, so an empty table explains itself. CdnHelp applies it until the core
+# HelpBundles registry ships in a QQQ release (STAND-IN(core=#1198)).
+# Summaries stay under 120 characters (CdnTablesGuardrailTest).
+entries:
+  - key: app:cdnAdmin;slot:help
+    summary: "Put a CDN in front of the application: cache headers, change-driven purges, edge statistics and checks."
+    content: |
+      The Setup card on the home lists each part (provider, hostnames, cache policies, tag rules, revalidation hooks, origin checks) with its status and the next step. A new installation has nothing: run Create default provider on Providers (No CDN records purges and sends nothing), Create default rules on Tag rules, and add your CDN when you have one.
+
+  - key: table:cdn_provider;slot:help
+    summary: "A CDN the application purges: its type, distribution id and the variable that holds its key."
+    content: |
+      **How rows get created:** an administrator adds one with New (pick the type, the distribution or zone id, and name the environment variable that holds the API key; the key itself is never stored), or runs Create default provider, which adds "No CDN (record only)": every record change is then recorded as a would-be purge and nothing is sent. Test Connection, Import Edge Stats and Check Config Drift are actions on a provider.
+
+  - key: table:cdn_hostname;slot:help
+    summary: "A hostname behind a provider and its rollout stage: Off, Headers only, Live or Locked."
+    content: |
+      **How rows get created:** an administrator adds one with New for each hostname the CDN serves, at stage Off, then moves it to Headers only and Live as the rollout proceeds. Only Live and Locked hostnames with purging enabled are sent purges. Check Origin Headers is an action on a hostname, and hostnames that are not Off are checked every night. The role field is a label for your own reference and changes nothing.
+
+  - key: table:cdn_cache_policy;slot:help
+    summary: "Cache-Control rules by path, route class or table; the lowest priority number that matches wins."
+    content: |
+      **How rows get created:** an administrator adds one with New, or runs Create default policies, which adds two turned-off examples (immutable static assets, never cache) to edit and turn on. A policy changes a response only where the application calls CdnResponseHeaderPolicy.decide when it answers; the qbit does not rewrite responses on its own. A response that sets a cookie or answers a signed-in user is always private, whatever the policies say.
+
+  - key: table:cdn_table_tag_rule;slot:help
+    summary: "How a table's record changes become cache tags and invalidation paths for purges."
+    content: |
+      **How rows get created:** an administrator adds one with New for each purgeable table the application lists, or runs Create default rules, which adds a tags-only rule for every purgeable table that has none (tags "table:id" and "table"). Add invalidation paths where your CDN purges by path, and a published field so draft edits purge nothing.
+
+  - key: table:cdn_purge_request;slot:help
+    summary: "Every purge the qbit recorded or sent, with its status, paths and tags."
+    content: |
+      **How rows get created:** only the qbit writes it: a change to a purgeable record, Purge From CDN on a record, or Purge Everything on a hostname. Without a provider nothing is recorded, so run Create default provider first. Retry Purge is an action here.
+
+  - key: table:cdn_revalidation_hook;slot:help
+    summary: "A signed webhook called before a CDN purge, so a front-end cache (for example Next.js) refreshes first."
+    content: |
+      **How rows get created:** an administrator adds one with New: the URL, the signature format and the environment variable that holds the signing secret (never the secret). It is optional; add one only when a front end keeps its own cache.
+
+  - key: table:cdn_edge_stat_daily;slot:help
+    summary: "Daily edge statistics imported from the CDN: requests, bytes, hit rate and error rates."
+    content: |
+      **How rows get created:** Import Edge Stats on a provider writes it, and a daily scheduled run does the same for every provider that supports it. A No CDN provider has no statistics.
+
+  - key: table:cdn_origin_check;slot:help
+    summary: "Results of asking a hostname's origin for sample pages and comparing their Cache-Control headers."
+    content: |
+      **How rows get created:** Check Origin Headers on a hostname writes one row per hostname, and a nightly scheduled run does the same for every hostname that is not Off. It requests the home page, the paths of prefix cache policies and the literal paths of tag rules over HTTPS and counts the right, missing or wrong, and unreadable ones.
+
+  - key: table:cdn_drift_finding;slot:help
+    summary: "Differences between the CDN's expected configuration and what the provider reports."
+    content: |
+      **How rows get created:** Check Config Drift on a provider writes it, and a nightly scheduled run does the same. It needs the expected configuration in the environment variable the provider names (CDN_EXPECTED_CONFIG by default); a finding is resolved when it no longer appears.
