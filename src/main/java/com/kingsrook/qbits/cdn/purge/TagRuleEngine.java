@@ -55,8 +55,8 @@ import static com.kingsrook.qqq.backend.core.logging.LogUtils.logPair;
  **   expires by TTL instead of being invalidated;
  ** - publishedField: when set, only records that are (or were) published
  **   count, so draft edits purge nothing;
- ** - onlyWhenFieldsChange: comma list; an update that changes none of them
- **   purges nothing.
+ ** - onlyWhenFieldsChange: comma list of watched fields; !field ignores a
+ **   field. With only ignored fields, any other changed field counts.
  **
  ** A dotted placeholder "{blog.slug}" reads field "slug" of the record that
  ** field "blogId" points to (the xId convention). The joined table is the one
@@ -159,7 +159,27 @@ public class TagRuleEngine
       String watched = rule.getValueString("onlyWhenFieldsChange");
       if(current != null && old != null && StringUtils.hasContent(watched))
       {
-         return (Arrays.stream(watched.split(",")).map(String::strip).filter(StringUtils::hasContent)
+         Set<String> included = new LinkedHashSet<>();
+         Set<String> ignored = new LinkedHashSet<>();
+         for(String entry : watched.split(","))
+         {
+            String field = entry.strip();
+            if(field.startsWith("!"))
+            {
+               ignored.add(field.substring(1).strip());
+            }
+            else if(StringUtils.hasContent(field))
+            {
+               included.add(field);
+            }
+         }
+         if(included.isEmpty() && !ignored.isEmpty())
+         {
+            included.addAll(current.getValues().keySet());
+            included.addAll(old.getValues().keySet());
+         }
+         included.removeAll(ignored);
+         return (included.stream()
             .anyMatch(field -> !Objects.equals(current.getValue(field), old.getValue(field))));
       }
       return (true);

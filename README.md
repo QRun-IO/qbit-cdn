@@ -31,7 +31,21 @@ Design: QRun-IO/qqq `docs/specs/2026-10-12-qbit-cdn-design.md`.
   NONE. See `docs/cloudfront-expected-config.md`.
 - **Permissions:** `cdn.view`, `cdn.purge`, `cdn.purgeAll`, `cdn.admin`.
 
-## Purge-path placeholders
+## Tag rules
+
+`cdn_table_tag_rule.onlyWhenFieldsChange` is a comma-separated list of QQQ field
+names. Plain entries (for example `title,slug`) purge only when at least one
+listed field changes. Prefix a field with `!` to ignore it: `!viewCount` prevents
+a view-count-only update from purging, while a title change still purges.
+With `!viewCount, !lastIndexedAt`, any change outside those fields counts.
+Mixed lists keep the allow-list and exclude ignored fields, even if also listed
+plainly: `title,viewCount,!viewCount` counts only title changes.
+
+Names are trimmed and case-sensitive. Partial updates retain omitted old values;
+only unequal old and new values count. This filter does not restrict inserts or
+deletes. The separate `publishedField` filter still applies to all changes.
+
+### Purge-path placeholders
 
 `cdn_table_tag_rule` templates (`tagTemplates`, `invalidationPaths`) can use `{field}` for the changed record's own fields and `{prefix.field}` for a joined record, e.g. `/blog/{blog.slug}/{slug}*`.
 
