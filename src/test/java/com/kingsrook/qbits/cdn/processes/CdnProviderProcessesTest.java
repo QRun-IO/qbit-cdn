@@ -199,9 +199,14 @@ class CdnProviderProcessesTest
    @Test
    void scheduledSteps() throws Exception
    {
+      FakePathProvider adapter = org.mockito.Mockito.spy(new FakePathProvider());
+      CdnRuntime.registerProvider(CdnProviderType.CLOUDFRONT, () -> adapter);
+      FakePathProvider.drift = List.of(new CdnOperations.DriftItem("origin.header", "present", "missing"));
       new CdnProviderProcesses.ScheduledStatsStep().run(null, null);
       new CdnProviderProcesses.ScheduledDriftStep().run(null, null);
       assertThat(new QueryAction().execute(new QueryInput(CdnTables.EDGE_STAT_DAILY)).getRecords()).hasSize(2);
-      assertEquals("OK", row().getValueString("lastHealthStatus"));
+      assertThat(new QueryAction().execute(new QueryInput(CdnTables.DRIFT_FINDING)).getRecords()).hasSize(1);
+      assertNull(row().getValueString("lastHealthStatus"));
+      org.mockito.Mockito.verify(adapter, org.mockito.Mockito.never()).connectionTest(org.mockito.ArgumentMatchers.any());
    }
 }
