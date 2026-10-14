@@ -17,12 +17,17 @@
 package com.kingsrook.qbits.cdn.checks;
 
 
+import javax.net.ssl.SNIHostName;
+import javax.net.ssl.SSLParameters;
+import javax.net.ssl.SSLSocket;
+import javax.net.ssl.SSLSocketFactory;
+import java.io.BufferedInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.InetAddress;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
+import java.net.InetSocketAddress;
+import java.net.Socket;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -262,39 +267,214 @@ public final class CdnOriginCheck
 
 
    /*******************************************************************************
-    ** The real fetcher: HTTPS GET, no redirects, public addresses only.
+    ** Whether an address is one an origin check may connect to: public unicast only.
+    ** Refuses loopback, private, link-local, carrier-grade NAT (100.64.0.0/10),
+    ** 0.0.0.0/8, benchmarking (198.18.0.0/15), multicast and reserved IPv4; IPv6
+    ** unique-local (fc00::/7), link-local, multicast; and IPv6 forms that embed an
+    ** IPv4 address (v4-mapped and -compatible, NAT64 64:ff9b::/96, 6to4), which are
+    ** unwrapped and checked as IPv4.
+    *******************************************************************************/
+   public static boolean isPublic(InetAddress address)
+   {
+      byte[] b = address.getAddress();
+      if(b.length == 4)
+      {
+         return (isPublicV4(b[0] & 0xff, b[1] & 0xff, b[2] & 0xff));
+      }
+      boolean zeros12 = true;
+      for(int i = 0; i < 12; i++)
+      {
+         zeros12 &= b[i] == 0;
+      }
+      boolean mapped = true;
+      for(int i = 0; i < 10; i++)
+      {
+         mapped &= b[i] == 0;
+      }
+      mapped &= (b[10] & 0xff) == 0xff && (b[11] & 0xff) == 0xff;
+      boolean nat64 = (b[0] & 0xff) == 0x00 && (b[1] & 0xff) == 0x64 && (b[2] & 0xff) == 0xff && (b[3] & 0xff) == 0x9b;
+      for(int i = 4; i < 12 && nat64; i++)
+      {
+         nat64 &= b[i] == 0;
+      }
+      if(zeros12 || mapped || nat64)
+      {
+         return (isPublicV4(b[12] & 0xff, b[13] & 0xff, b[14] & 0xff));
+      }
+      if((b[0] & 0xff) == 0x20 && (b[1] & 0xff) == 0x02 && !isPublicV4(b[2] & 0xff, b[3] & 0xff, b[4] & 0xff))
+      {
+         return (false);
+      }
+      int     first     = b[0] & 0xff;
+      boolean ula       = (first & 0xfe) == 0xfc;
+      boolean linkLocal = first == 0xfe && (b[1] & 0xc0) == 0x80;
+      boolean siteLocal = first == 0xfe && (b[1] & 0xc0) == 0xc0;
+      return (!ula && !linkLocal && !siteLocal && first != 0xff);
+   }
+
+
+
+   /*******************************************************************************
+    **
+    *******************************************************************************/
+   private static boolean isPublicV4(int a, int b, int c)
+   {
+      if(a == 0 || a == 10 || a == 127 || a >= 224)
+      {
+         return (false);
+      }
+      if(a == 100 && b >= 64 && b <= 127)
+      {
+         return (false);
+      }
+      if(a == 169 && b == 254)
+      {
+         return (false);
+      }
+      if(a == 172 && b >= 16 && b <= 31)
+      {
+         return (false);
+      }
+      if(a == 192 && (b == 168 || (b == 0 && (c == 0 || c == 2)) || (b == 88 && c == 99)))
+      {
+         return (false);
+      }
+      if(a == 198 && (b == 18 || b == 19 || (b == 51 && c == 100)))
+      {
+         return (false);
+      }
+      return (!(a == 203 && b == 0 && c == 113));
+   }
+
+
+
+   /*******************************************************************************
+    ** The address to connect to: every address the name resolves to must be public,
+    ** and the first one is used, so the connection goes to what was checked.
+    *******************************************************************************/
+   static InetAddress pick(InetAddress[] resolved) throws IOException
+   {
+      if(resolved == null || resolved.length == 0)
+      {
+         throw (new IOException("the host did not resolve"));
+      }
+      for(InetAddress address : resolved)
+      {
+         if(!isPublic(address))
+         {
+            throw (new IOException("the host resolves to a non-public address"));
+         }
+      }
+      return (resolved[0]);
+   }
+
+
+
+   /*******************************************************************************
+    ** Read a status line and headers (and nothing else) from an HTTP/1.1 response,
+    ** within a total deadline and a size limit.
+    *******************************************************************************/
+   static Response readResponse(InputStream in, long deadlineNanos) throws IOException
+   {
+      String status = readLine(in, deadlineNanos);
+      int    total  = status.length();
+      String[] parts = status.split(" ", 3);
+      if(parts.length < 2 || !parts[0].startsWith("HTTP/"))
+      {
+         throw (new IOException("not an HTTP response"));
+      }
+      int code;
+      try
+      {
+         code = Integer.parseInt(parts[1]);
+      }
+      catch(NumberFormatException e)
+      {
+         throw (new IOException("bad status line"));
+      }
+      Map<String, String> headers = new LinkedHashMap<>();
+      while(true)
+      {
+         String line = readLine(in, deadlineNanos);
+         total += line.length();
+         if(line.isEmpty())
+         {
+            return (new Response(code, headers));
+         }
+         if(total > 16_384)
+         {
+            throw (new IOException("the headers are too large"));
+         }
+         int colon = line.indexOf(':');
+         if(colon > 0)
+         {
+            headers.merge(line.substring(0, colon).strip().toLowerCase(Locale.ROOT), line.substring(colon + 1).strip(), (x, y) -> x + ", " + y);
+         }
+      }
+   }
+
+
+
+   /*******************************************************************************
+    **
+    *******************************************************************************/
+   private static String readLine(InputStream in, long deadlineNanos) throws IOException
+   {
+      StringBuilder line = new StringBuilder();
+      while(true)
+      {
+         if(System.nanoTime() > deadlineNanos)
+         {
+            throw (new IOException("the origin was too slow"));
+         }
+         int c = in.read();
+         if(c < 0)
+         {
+            throw (new IOException("the connection closed early"));
+         }
+         if(c == '\n')
+         {
+            return (line.toString().stripTrailing());
+         }
+         line.append((char) c);
+         if(line.length() > 8192)
+         {
+            throw (new IOException("a header line is too long"));
+         }
+      }
+   }
+
+
+
+   /*******************************************************************************
+    ** The real fetcher: resolve once, refuse non-public addresses, connect to the
+    ** address that was checked (TLS with the name as SNI and for verification), send
+    ** one GET, read the status line and headers only, and close. No redirects, no body.
     *******************************************************************************/
    static final class HttpFetcher implements Fetcher
    {
-      private final HttpClient client = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).connectTimeout(Duration.ofSeconds(5)).build();
-
-
-
       /*******************************************************************************
        ** {@inheritDoc}
        *******************************************************************************/
       @Override
       public Response fetch(String host, String path) throws IOException
       {
-         for(InetAddress address : InetAddress.getAllByName(host))
+         InetAddress address  = pick(InetAddress.getAllByName(host));
+         long        deadline = System.nanoTime() + Duration.ofSeconds(10).toNanos();
+         try(Socket plain = new Socket())
          {
-            if(address.isAnyLocalAddress() || address.isLoopbackAddress() || address.isLinkLocalAddress() || address.isSiteLocalAddress() || address.isMulticastAddress())
-            {
-               throw (new IOException("the host resolves to a non-public address"));
-            }
-         }
-         try
-         {
-            HttpResponse<Void> response = client.send(HttpRequest.newBuilder(URI.create("https://" + host + path)).timeout(Duration.ofSeconds(10)).GET().build(),
-               HttpResponse.BodyHandlers.discarding());
-            Map<String, String> headers = new LinkedHashMap<>();
-            response.headers().map().forEach((key, values) -> headers.put(key.toLowerCase(Locale.ROOT), String.join(", ", values)));
-            return (new Response(response.statusCode(), headers));
-         }
-         catch(InterruptedException e)
-         {
-            Thread.currentThread().interrupt();
-            throw (new IOException("interrupted", e));
+            plain.connect(new InetSocketAddress(address, 443), 5000);
+            plain.setSoTimeout(5000);
+            SSLSocket     socket     = (SSLSocket) ((SSLSocketFactory) SSLSocketFactory.getDefault()).createSocket(plain, host, 443, true);
+            SSLParameters parameters = socket.getSSLParameters();
+            parameters.setServerNames(List.of(new SNIHostName(host)));
+            parameters.setEndpointIdentificationAlgorithm("HTTPS");
+            socket.setSSLParameters(parameters);
+            socket.startHandshake();
+            socket.getOutputStream().write(("GET " + path + " HTTP/1.1\r\nHost: " + host + "\r\nUser-Agent: qbit-cdn-origin-check\r\nAccept: */*\r\nConnection: close\r\n\r\n")
+               .getBytes(StandardCharsets.US_ASCII));
+            socket.getOutputStream().flush();
+            return (readResponse(new BufferedInputStream(socket.getInputStream()), deadline));
          }
       }
    }

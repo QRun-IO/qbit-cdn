@@ -26,8 +26,10 @@ import com.kingsrook.qbits.cdn.CdnRuntime;
 import com.kingsrook.qbits.cdn.model.CdnHostnameStage;
 import com.kingsrook.qbits.cdn.model.CdnTables;
 import com.kingsrook.qbits.cdn.spi.CdnProviderType;
+import com.kingsrook.qqq.backend.core.actions.tables.CountAction;
 import com.kingsrook.qqq.backend.core.actions.tables.QueryAction;
 import com.kingsrook.qqq.backend.core.exceptions.QException;
+import com.kingsrook.qqq.backend.core.model.actions.tables.count.CountInput;
 import com.kingsrook.qqq.backend.core.model.actions.tables.query.QueryInput;
 import com.kingsrook.qqq.backend.core.model.data.QRecord;
 
@@ -80,8 +82,9 @@ public final class CdnSetupStatus
       List<QRecord> policies  = all(CdnTables.CACHE_POLICY);
       List<QRecord> rules     = all(CdnTables.TABLE_TAG_RULE);
       List<QRecord> hooks     = all(CdnTables.REVALIDATION_HOOK);
-      List<QRecord> checks    = all(CdnTables.ORIGIN_CHECK);
-      return (build(providers, hostnames, policies, rules, hooks, checks, config == null ? List.of() : config.getPurgeableTables()));
+      long          checks    = new CountAction().execute(new CountInput(CdnTables.ORIGIN_CHECK)).getCount();
+      boolean       scheduled = config != null && config.getSchedulerName() != null;
+      return (build(providers, hostnames, policies, rules, hooks, checks, config == null ? List.of() : config.getPurgeableTables(), scheduled));
    }
 
 
@@ -90,14 +93,14 @@ public final class CdnSetupStatus
     ** The items for given rows (no queries; for tests and reuse).
     *******************************************************************************/
    public static List<Item> build(List<QRecord> providers, List<QRecord> hostnames, List<QRecord> policies, List<QRecord> rules, List<QRecord> hooks,
-                                  List<QRecord> checks, List<String> purgeableTables)
+                                  long checks, List<String> purgeableTables, boolean scheduled)
    {
       List<Item> items = new ArrayList<>();
 
       //////////////
       // provider //
       //////////////
-      List<QRecord> enabledProviders = providers.stream().filter(p -> !Boolean.FALSE.equals(p.getValueBoolean("enabled"))).toList();
+      List<QRecord> enabledProviders = providers.stream().filter(p -> Boolean.TRUE.equals(p.getValueBoolean("enabled"))).toList();
       List<QRecord> real             = enabledProviders.stream().filter(p -> !CdnProviderType.NONE.name().equals(p.getValueString("providerType"))).toList();
       if(providers.isEmpty())
       {
@@ -132,17 +135,18 @@ public final class CdnSetupStatus
       }
       else
       {
-         long live = hostnames.stream().filter(h -> CdnHostnameStage.LIVE.name().equals(h.getValueString("stage")) || CdnHostnameStage.LOCKED.name().equals(h.getValueString("stage"))).count();
+         long live = hostnames.stream().filter(h -> (CdnHostnameStage.LIVE.name().equals(h.getValueString("stage")) || CdnHostnameStage.LOCKED.name().equals(h.getValueString("stage")))
+            && Boolean.TRUE.equals(h.getValueBoolean("purgeEnabled"))).count();
          items.add(live == 0
             ? new Item("Hostnames", CdnTables.HOSTNAME, State.DEFAULT, hostnames.size() + " hostname" + (hostnames.size() == 1 ? "" : "s") + ", none Live: purges are recorded, not sent.",
-               "When the CDN serves a hostname, move it to Live.")
+               "When the CDN serves a hostname, move it to Live (and leave Purge enabled on).")
             : new Item("Hostnames", CdnTables.HOSTNAME, State.OK, live + " of " + hostnames.size() + " hostnames Live.", null));
       }
 
       ////////////////////////
       // cache policies     //
       ////////////////////////
-      long enabledPolicies = policies.stream().filter(p -> !Boolean.FALSE.equals(p.getValueBoolean("enabled"))).count();
+      long enabledPolicies = policies.stream().filter(p -> Boolean.TRUE.equals(p.getValueBoolean("enabled"))).count();
       items.add(policies.isEmpty()
          ? new Item("Cache policies", CdnTables.CACHE_POLICY, State.OPTIONAL, "None: responses keep the headers your application sets.",
             "Run Create default policies for examples. Policies only change responses when the application calls CdnResponseHeaderPolicy.")
@@ -155,7 +159,7 @@ public final class CdnSetupStatus
       // tag rules: every purgeable table   //
       ////////////////////////////////////////
       Set<String> covered = new HashSet<>();
-      rules.stream().filter(r -> !Boolean.FALSE.equals(r.getValueBoolean("enabled"))).forEach(r -> covered.add(r.getValueString("tableName")));
+      rules.stream().filter(r -> Boolean.TRUE.equals(r.getValueBoolean("enabled"))).forEach(r -> covered.add(r.getValueString("tableName")));
       List<String> uncovered = purgeableTables.stream().filter(t -> !covered.contains(t)).toList();
       if(purgeableTables.isEmpty())
       {
@@ -174,7 +178,7 @@ public final class CdnSetupStatus
       ///////////////////////
       // revalidation hooks //
       ///////////////////////
-      long enabledHooks = hooks.stream().filter(h -> !Boolean.FALSE.equals(h.getValueBoolean("enabled"))).count();
+      long enabledHooks = hooks.stream().filter(h -> Boolean.TRUE.equals(h.getValueBoolean("enabled"))).count();
       items.add(enabledHooks == 0
          ? new Item("Revalidation hooks", CdnTables.REVALIDATION_HOOK, State.OPTIONAL, "None.", "Add one if a front end keeps its own cache (for example Next.js) that must refresh before the CDN is purged.")
          : new Item("Revalidation hooks", CdnTables.REVALIDATION_HOOK, State.OK, enabledHooks + " hook" + (enabledHooks == 1 ? "" : "s") + " turned on.", null));
@@ -182,9 +186,10 @@ public final class CdnSetupStatus
       ////////////////////
       // origin checks  //
       ////////////////////
-      items.add(checks.isEmpty()
-         ? new Item("Origin checks", CdnTables.ORIGIN_CHECK, State.OPTIONAL, "Never run.", "Run Check Origin Headers on Hostnames. Hostnames that are not Off are also checked every night.")
-         : new Item("Origin checks", CdnTables.ORIGIN_CHECK, State.OK, checks.size() + " check" + (checks.size() == 1 ? "" : "s") + " recorded.", null));
+      items.add(checks == 0
+         ? new Item("Origin checks", CdnTables.ORIGIN_CHECK, State.OPTIONAL, "Never run.",
+            "Run Check Origin Headers on Hostnames." + (scheduled ? " Hostnames that are not Off are also checked every night." : " No scheduler is configured, so nothing runs it automatically."))
+         : new Item("Origin checks", CdnTables.ORIGIN_CHECK, State.OK, checks + " check" + (checks == 1 ? "" : "s") + " recorded.", null));
       return (items);
    }
 

@@ -398,7 +398,9 @@ public final class CdnDefaultsProcesses
     *******************************************************************************/
    public static class DefaultsLoad extends AbstractLoadStep implements ProcessSummaryProviderInterface
    {
-      private final ProcessSummaryLine added = line(Status.OK, "default row will be added", "default rows will be added", "default row was added", "default rows were added");
+      private final ProcessSummaryLine added    = line(Status.OK, "default row will be added", "default rows will be added", "default row was added", "default rows were added");
+      private final ProcessSummaryLine failed   = line(Status.ERROR, "default row could not be added", "default rows could not be added", "default row could not be added", "default rows could not be added");
+      private final List<String>       problems = new ArrayList<>();
 
 
 
@@ -410,8 +412,16 @@ public final class CdnDefaultsProcesses
       {
          for(QRecord inserted : new InsertAction().execute(new InsertInput(input.getTableName()).withRecords(input.getRecords())).getRecords())
          {
-            added.incrementCountAndAddPrimaryKey(inserted.getValue("id"));
-            output.getRecords().add(inserted);
+            if(inserted.getErrors() == null || inserted.getErrors().isEmpty())
+            {
+               added.incrementCountAndAddPrimaryKey(inserted.getValue("id"));
+               output.getRecords().add(inserted);
+            }
+            else
+            {
+               failed.incrementCount();
+               inserted.getErrors().forEach(error -> problems.add(error.getMessage()));
+            }
          }
       }
 
@@ -425,6 +435,8 @@ public final class CdnDefaultsProcesses
       {
          ArrayList<ProcessSummaryLineInterface> lines = new ArrayList<>();
          added.addSelfToListIfAnyCount(lines);
+         failed.setBulletsOfText(new ArrayList<>(problems));
+         failed.addSelfToListIfAnyCount(lines);
          return (lines);
       }
    }

@@ -161,6 +161,23 @@ class CdnTablesGuardrailTest
 
 
    /*******************************************************************************
+    ** A host's own help in the slot is never replaced by the bundle.
+    *******************************************************************************/
+   @Test
+   void hostHelpIsKept() throws Exception
+   {
+      QTableMetaData table = qInstance.getTable(CdnTables.PROVIDER);
+      table.withHelpContent(CdnHelp.SLOT, new QHelpContent("Host help for providers."));
+      qInstance.getApp("cdnAdmin").withHelpContent(CdnHelp.SLOT, new QHelpContent("Host help for the app."));
+      CdnHelp.apply(qInstance, "cdnAdmin");
+      assertThat(table.getHelpContent().get(CdnHelp.SLOT)).singleElement().satisfies(h -> assertThat(h.getContent()).isEqualTo("Host help for providers."));
+      assertThat(qInstance.getApp("cdnAdmin").getHelpContent().get(CdnHelp.SLOT)).singleElement().satisfies(h -> assertThat(h.getContent()).isEqualTo("Host help for the app."));
+      assertThat(qInstance.getTable(CdnTables.HOSTNAME).getHelpContent().get(CdnHelp.SLOT).get(0).getContent()).contains("How rows get created");
+   }
+
+
+
+   /*******************************************************************************
     **
     *******************************************************************************/
    private List<String> cdnTables()

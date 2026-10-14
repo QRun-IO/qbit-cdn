@@ -69,12 +69,11 @@ class CdnSetupStatusTest
    void aCompleteSetupIsOk()
    {
       List<QRecord> providers = List.of(new QRecord().withValue("providerType", "CLOUDFRONT").withValue("enabled", true).withValue("lastHealthStatus", "OK"));
-      List<QRecord> hostnames = List.of(new QRecord().withValue("stage", "LIVE"));
+      List<QRecord> hostnames = List.of(new QRecord().withValue("stage", "LIVE").withValue("purgeEnabled", true));
       List<QRecord> policies  = List.of(new QRecord().withValue("enabled", true));
       List<QRecord> rules     = List.of(new QRecord().withValue("tableName", "post").withValue("enabled", true));
       List<QRecord> hooks     = List.of(new QRecord().withValue("enabled", true));
-      List<QRecord> checks    = List.of(new QRecord());
-      List<Item>    items     = CdnSetupStatus.build(providers, hostnames, policies, rules, hooks, checks, List.of("post"));
+      List<Item>    items     = CdnSetupStatus.build(providers, hostnames, policies, rules, hooks, 1, List.of("post"), true);
       assertThat(items).extracting(Item::state).containsOnly(State.OK);
    }
 
@@ -88,14 +87,24 @@ class CdnSetupStatusTest
    {
       QRecord none = new QRecord().withValue("providerType", "NONE").withValue("enabled", true);
       List<Item> items = CdnSetupStatus.build(List.of(none), List.of(new QRecord().withValue("stage", "OFF")), List.of(new QRecord().withValue("enabled", false)),
-         List.of(), List.of(), List.of(), List.of("post", "page"));
+         List.of(), List.of(), 0, List.of("post", "page"), false);
       assertThat(item(items, "Providers").state()).isEqualTo(State.DEFAULT);
       assertThat(item(items, "Hostnames").state()).isEqualTo(State.DEFAULT);
       assertThat(item(items, "Cache policies").state()).isEqualTo(State.DEFAULT);
       assertThat(item(items, "Tag rules").detail()).contains("post, page");
+      assertThat(item(items, "Origin checks").nextStep()).contains("No scheduler is configured");
+
+      ///////////////////////////////////////////////////////////////////////////////////
+      // like the runtime: Live needs purge enabled, and a null enabled counts as off   //
+      ///////////////////////////////////////////////////////////////////////////////////
+      List<Item> unpurgeable = CdnSetupStatus.build(List.of(new QRecord().withValue("providerType", "CLOUDFRONT")), List.of(new QRecord().withValue("stage", "LIVE").withValue("purgeEnabled", false)),
+         List.of(), List.of(), List.of(), 0, List.of(), true);
+      assertThat(item(unpurgeable, "Providers").state()).isEqualTo(State.TODO);
+      assertThat(item(unpurgeable, "Hostnames").state()).isEqualTo(State.DEFAULT);
+      assertThat(item(unpurgeable, "Origin checks").nextStep()).contains("every night");
 
       QRecord failing = new QRecord().withValue("providerType", "FASTLY").withValue("enabled", true).withValue("lastHealthStatus", "FAILED");
-      assertThat(item(CdnSetupStatus.build(List.of(failing), List.of(), List.of(), List.of(), List.of(), List.of(), List.of()), "Providers").state()).isEqualTo(State.TODO);
-      assertThat(item(CdnSetupStatus.build(List.of(failing), List.of(), List.of(), List.of(), List.of(), List.of(), List.of()), "Hostnames").state()).isEqualTo(State.TODO);
+      assertThat(item(CdnSetupStatus.build(List.of(failing), List.of(), List.of(), List.of(), List.of(), 0, List.of(), false), "Providers").state()).isEqualTo(State.TODO);
+      assertThat(item(CdnSetupStatus.build(List.of(failing), List.of(), List.of(), List.of(), List.of(), 0, List.of(), false), "Hostnames").state()).isEqualTo(State.TODO);
    }
 }

@@ -27,6 +27,7 @@ import com.kingsrook.qbits.cdn.permissions.CdnPermissions;
 import com.kingsrook.qqq.backend.core.actions.processes.BackendStep;
 import com.kingsrook.qqq.backend.core.actions.tables.QueryAction;
 import com.kingsrook.qqq.backend.core.exceptions.QException;
+import com.kingsrook.qqq.backend.core.logging.QLogger;
 import com.kingsrook.qqq.backend.core.model.actions.processes.ProcessSummaryLine;
 import com.kingsrook.qqq.backend.core.model.actions.processes.ProcessSummaryLineInterface;
 import com.kingsrook.qqq.backend.core.model.actions.processes.RunBackendStepInput;
@@ -46,6 +47,7 @@ import com.kingsrook.qqq.backend.core.processes.implementations.etl.streamedwith
 import com.kingsrook.qqq.backend.core.processes.implementations.etl.streamedwithfrontend.AbstractTransformStep;
 import com.kingsrook.qqq.backend.core.processes.implementations.etl.streamedwithfrontend.ProcessSummaryProviderInterface;
 import static com.kingsrook.qbits.cdn.processes.CdnProcesses.line;
+import static com.kingsrook.qqq.backend.core.logging.LogUtils.logPair;
 
 
 /*******************************************************************************
@@ -56,6 +58,8 @@ import static com.kingsrook.qbits.cdn.processes.CdnProcesses.line;
  *******************************************************************************/
 public final class CdnOriginCheckProcesses
 {
+   private static final QLogger LOG = QLogger.getLogger(CdnOriginCheckProcesses.class);
+
    public static final String CHECK_ORIGIN     = "cdnCheckOrigin";
    public static final String SCHEDULED_ORIGIN = "cdnScheduledCheckOrigin";
 
@@ -198,7 +202,14 @@ public final class CdnOriginCheckProcesses
          for(QRecord hostname : new QueryAction().execute(new QueryInput(CdnTables.HOSTNAME)
             .withFilter(new QQueryFilter(new QFilterCriteria("stage", QCriteriaOperator.NOT_EQUALS, CdnHostnameStage.OFF.name())))).getRecords())
          {
-            CdnOriginCheck.checkAndRecord(hostname);
+            try
+            {
+               CdnOriginCheck.checkAndRecord(hostname);
+            }
+            catch(RuntimeException | QException e)
+            {
+               LOG.warn("An origin check failed", e, logPair("hostname", hostname.getValueString("hostname")));
+            }
          }
       }
    }
