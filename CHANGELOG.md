@@ -23,6 +23,7 @@ All notable changes to this project are documented here. The format follows Keep
 
 
 ### Fixed
+- Derive the CDN qbit metadata version from the Maven artifact version, keeping release metadata and the help bundle in sync.
 - Tag rules accept ignored fields in `onlyWhenFieldsChange`, such as `!viewCount`, so counter-only updates do not purge rendered pages. Plain allow-lists still work, and ignored fields take precedence in mixed lists. No schema change is needed.
 - Purge actions warn when providers are NONE or hostnames are OFF, and report requests as recorded but not sent. The home explains recorded-only purges and that this version does not run origin header checks.
 - Tag rule `{prefix.field}` placeholders now resolve the joined table from the `<prefix>Id` field's possible-value source, so prefixed tables (`cms_blog`) work; a missing joined table is logged instead of silently skipped.

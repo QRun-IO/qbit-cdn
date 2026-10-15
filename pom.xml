@@ -113,6 +113,7 @@
             <filtering>true</filtering>
             <includes>
                <include>help/*.yaml</include>
+               <include>qbit-cdn.properties</include>
             </includes>
          </resource>
          <resource>
@@ -120,6 +121,7 @@
             <filtering>false</filtering>
             <excludes>
                <exclude>help/*.yaml</exclude>
+               <exclude>qbit-cdn.properties</exclude>
             </excludes>
          </resource>
       </resources>
