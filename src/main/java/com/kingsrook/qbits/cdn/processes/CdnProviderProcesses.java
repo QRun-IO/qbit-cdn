@@ -525,7 +525,7 @@ public final class CdnProviderProcesses
 
 
    /*******************************************************************************
-    ** Scheduled: daily drift check (and connection test) for every operable
+    ** Scheduled: daily drift check for every operable
     ** provider.
     *******************************************************************************/
    public static class ScheduledDriftStep implements BackendStep
@@ -538,7 +538,6 @@ public final class CdnProviderProcesses
       {
          for(QRecord provider : operableProviders())
          {
-            testAndRecord(provider);
             driftAndRecord(provider);
          }
       }

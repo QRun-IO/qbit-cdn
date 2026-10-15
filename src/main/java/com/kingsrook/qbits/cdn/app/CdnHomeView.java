@@ -73,26 +73,6 @@ public final class CdnHomeView
 
 
    /*******************************************************************************
-    ** The Health status card.
-    *******************************************************************************/
-   public static String renderHealthCard(CdnHomeData data, String appPath)
-   {
-      String state = data.overallState();
-      String text = "All CDN checks are OK.";
-      if("NOT_CONNECTED".equals(state))
-      {
-         text = "No CDN provider configured: purges are recorded only.";
-      }
-      else if("ATTENTION".equals(state))
-      {
-         text = "Needs attention: see the CDN home.";
-      }
-      return ("<div style=\"" + CARD + "\"><strong>CDN</strong><p>" + esc(text) + "</p><a href=\"" + esc(appPath) + "\">Open the CDN home</a></div>");
-   }
-
-
-
-   /*******************************************************************************
     ** Connection card.
     *******************************************************************************/
    private static void connection(StringBuilder html, CdnHomeData data, String appPath)

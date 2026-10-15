@@ -253,24 +253,6 @@ public record CdnHomeData(List<ProviderView> providers, List<HostnameView> hostn
 
 
    /*******************************************************************************
-    ** Overall state for the Health card: NOT_CONNECTED, ATTENTION or OK.
-    *******************************************************************************/
-   public String overallState()
-   {
-      if(!isConnected())
-      {
-         return ("NOT_CONNECTED");
-      }
-      boolean attention = dead24h > 0 || !openDriftByArea.isEmpty()
-         || providers.stream().anyMatch(p -> p.isConnected() && ("FAILED".equals(p.lastHealthStatus())
-            || (p.credentialAgeDays() != null && p.credentialAgeDays() >= ROTATION_WARNING_DAYS)))
-         || budgets.stream().anyMatch(b -> b.billed() > b.soft());
-      return (attention ? "ATTENTION" : "OK");
-   }
-
-
-
-   /*******************************************************************************
     ** Paths billed this month for a provider.
     *******************************************************************************/
    private static int billed(Integer providerId, LocalDate today) throws QException
