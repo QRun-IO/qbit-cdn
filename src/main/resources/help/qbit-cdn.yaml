@@ -1,0 +1,487 @@
+bundle: qbit-cdn
+version: 0.1.0-SNAPSHOT
+layer: QBIT
+entries:
+- key: app:cdnAdmin;slot:help
+  summary: Manage your CDN connection, cache rules, purges and edge health.
+  content: |
+    A CDN keeps copies of your pages close to visitors. Use this app to configure how your application caches responses and clears old copies when records change.
+
+    The **Setup** card shows what you still need to configure. Open **Connection** for providers and hostnames, **Settings** for cache policies and tag rules, **Activity** for purge requests and revalidation hooks, and **Performance** for statistics, origin checks and drift findings.
+
+    Start with **Create default provider** and **Create default rules**. Add your real provider and hostnames when you are ready. Purges require an enabled provider and a Live or Locked hostname with purging enabled. With No CDN, requests are recorded but not sent; with no enabled provider, no request is recorded.
+
+    You can use **Purge From CDN** on tables your application makes purgeable, or **{{label:cdnPurgeHostname}}** on a hostname. Your access depends on the CDN view, purge, purge-all and admin permissions granted by your application.
+- key: table:cdn_provider;slot:help
+  summary: The CDN service in front of the site, with the account details used to talk to it and its latest health.
+  content: |
+    A provider row says which CDN you use (or that you use none), which distribution or zone to clear, and which server settings hold the credentials. While its type is **No CDN**, purge requests are recorded but nothing is sent.
+
+    Credentials are never stored here. **{{label:cdn_provider.secretRef}}** names the prefix of server settings that hold them. After changing the type or distribution, run **{{label:cdnTestConnection}}**; it records the result and fills in the DNS target and origin.
+
+    Other actions: **{{label:cdnImportEdgeStats}}** and **{{label:cdnCheckDrift}}**. When a scheduler is configured, daily jobs run both automatically. Editing needs the CDN admin permission.
+
+    **How rows get created:** you add one with New (pick the type, the distribution or zone id, and name the environment variable that holds the API key; the key itself is never stored), or run Create default provider, which adds "No CDN (record only)": matching changes to configured purgeable tables are then recorded as a would-be purge and nothing is sent. Test Connection, Import Edge Stats and Check Config Drift are actions on a provider.
+- key: table:cdn_provider;field:name
+  summary: A short name for this CDN connection, shown on the CDN home screen.
+- key: table:cdn_provider;field:providerType
+  summary: Which CDN service this is. Choose No CDN until a real one is connected.
+  content: |
+    See the list for the values. Only **Amazon CloudFront** and **Souin (self-hosted)** can send purges today; the others are listed for future use. With **No CDN** nothing is sent and purge requests are marked "Not sent (no CDN)".
+- key: table:cdn_provider;field:enabled
+  summary: Turn off to stop purging and checking this provider without deleting it.
+  content: |
+    Disabled providers get no new purge requests and are skipped by the daily jobs.
+- key: table:cdn_provider;field:accountRef
+  summary: The account the CDN belongs to, for your own reference, such as the AWS account number.
+- key: table:cdn_provider;field:zoneOrDistributionId
+  summary: 'The CDN''s own id for what to clear: the CloudFront distribution id, or the Souin API address.'
+  content: |
+    Required for purges and checks to work. Purges to the wrong id clear the wrong cache, so copy it exactly from the CDN console.
+- key: table:cdn_provider;field:secretRef
+  summary: The name prefix of the server settings that hold the CDN credentials. Not the credentials themselves.
+  content: |
+    For CloudFront, a prefix such as CDN_AWS means the server must have CDN_AWS_ACCESS_KEY_ID and CDN_AWS_SECRET_ACCESS_KEY set. Credentials are set on the server by an administrator and never typed here.
+- key: table:cdn_provider;field:settingsJson
+  summary: Extra provider settings as JSON, such as the flush window and the invalidation budget.
+  content: |
+    Use JSON for provider settings such as the flush window or path budget. Values are strings. Missing settings use the application defaults. Ask your administrator which settings your provider supports before changing them.
+- key: table:cdn_provider;field:dnsTarget
+  summary: The address your DNS records should point at to use this CDN. Filled in by Test Connection.
+- key: table:cdn_provider;field:originHost
+  summary: The server the CDN fetches pages from, with its port. Filled in by Test Connection.
+- key: table:cdn_provider;field:credentialRotatedDate
+  summary: When the CDN credentials were last replaced. Enter it by hand after you rotate them.
+  content: |
+    Enter this date after you rotate the credentials. The home screen shows their age and warns from 75 days; choose a rotation policy appropriate for your application.
+- key: table:cdn_provider;field:maskedKeyId
+  summary: A masked access key identifier, if supplied by your application.
+  content: |
+    This version does not populate this field. Never enter a secret here.
+- key: table:cdn_provider;field:lastHealthStatus
+  summary: Result of the last connection test, OK or FAILED. Filled in by Test Connection and the daily check.
+- key: table:cdn_provider;field:lastHealthMessage
+  summary: What the last connection test found, or why it failed. Filled in automatically.
+- key: table:cdn_provider;field:lastHealthCheckDate
+  summary: When the connection was last tested, filled in automatically.
+- key: table:cdn_provider;field:lastSuccessfulTestDate
+  summary: When a connection test last passed, filled in automatically.
+- key: table:cdn_hostname;slot:help
+  summary: A web address served through the CDN, and how far along it is in being switched over.
+  content: |
+    Add one row per hostname, such as the site, the API and the media host. **{{label:cdn_hostname.stage}}** lets you roll the CDN out gradually: purges are only sent when at least one hostname of the provider is **Live** or **Locked to CDN** and has purging on.
+
+    Use **{{label:cdnPurgeHostname}}** to clear a provider's whole cache. Editing needs the CDN admin permission.
+
+    **How rows get created:** you add one with New for each hostname the CDN serves, at stage Off, then move it to Headers only and Live as the rollout proceeds. Only Live and Locked hostnames with purging enabled are sent purges. Check Origin Headers is an action on a hostname, and hostnames that are not Off are checked nightly when your application configures a scheduler. The role field is a label for your own reference and changes nothing.
+- key: table:cdn_hostname;field:hostname
+  summary: Enter the hostname without a scheme or path, for example www.example.com.
+- key: table:cdn_hostname;field:cdnProviderId
+  summary: The CDN provider that serves this hostname.
+- key: table:cdn_hostname;field:hostnameRole
+  summary: What the hostname is used for, such as SITE, API or MEDIA. A label for your own reference.
+- key: table:cdn_hostname;field:stage
+  summary: How far this hostname is switched over to the CDN.
+  content: |
+    - **Off** (default: {{default:cdn_hostname.stage}}): not using the CDN yet.
+    - **Headers only**: a preparation step. Purges are not sent yet.
+    - **Live**: in use, and purges are sent.
+    - **Locked to CDN**: the final step, locked to the CDN. Purges are sent.
+
+    If no hostname of the provider is Live or Locked, new purge requests are marked "Not sent (hostnames not live)".
+- key: table:cdn_hostname;field:purgeEnabled
+  summary: Whether purges count for this hostname. Turn off to stop purging for it.
+  content: |
+    A purge is only sent when at least one hostname of the provider is Live or Locked and has this on.
+- key: table:cdn_hostname;field:notes
+  summary: Free-form notes about this hostname.
+- key: table:cdn_cache_policy;slot:help
+  summary: Rules that decide how long browsers and the CDN may keep a page or file before asking again.
+  content: |
+    Each rule matches requests by address, kind of route or table, and gives the cache lifetimes to send. The rule with the lowest **{{label:cdn_cache_policy.priority}}** number that matches wins. A rule tied to a **Hostname** applies only there.
+
+    Responses to signed-in visitors, and responses that set a cookie, are always sent as private and never cached, whatever the rules say. A rule with **Never Store** also sends private, no-store.
+
+    Changes can take up to a minute to be noticed. Editing needs the CDN admin permission.
+
+    **How rows get created:** you add one with New, or run Create default policies, which adds two turned-off examples (immutable static assets, never cache) to edit and turn on. A policy changes a response only where the application calls the CDN header policy integration when it answers; the qbit does not rewrite responses on its own. A response that sets a cookie or answers a signed-in user is always private, whatever the policies say.
+- key: table:cdn_cache_policy;field:name
+  summary: A short name that says what the rule is for, such as Static assets.
+- key: table:cdn_cache_policy;field:cdnHostnameId
+  summary: Limits the rule to one hostname. Leave empty to apply it to all hostnames.
+- key: table:cdn_cache_policy;field:matchType
+  summary: How the rule picks the requests it applies to.
+  content: |
+    How the rule picks requests: PREFIX, GLOB, ROUTE_CLASS or TABLE.
+
+    - **PREFIX**: the address starts with the value, for example /blogs/.
+    - **GLOB**: the address matches a pattern where * stands for anything.
+    - **ROUTE_CLASS**: the kind of route the site assigns to the page.
+    - **TABLE**: the response is for records of the named table.
+    Any other value never matches.
+- key: table:cdn_cache_policy;field:matchValue
+  summary: What to match against, in the form the match type needs, such as /blogs/ for a prefix.
+- key: table:cdn_cache_policy;field:policyClass
+  summary: 'What kind of content the rule is for: {{values:cdn_policy_class}}.'
+  content: |
+    - **{{label:cdn_cache_policy.immutable}}**: files that never change at the same address.
+    - **Leaf**: a single page or record.
+    - **Hub**: a list page that changes whenever its items do.
+    - **Never cache**: private or live content.
+    It describes the rule; the lifetimes and flags below decide what is actually sent.
+- key: table:cdn_cache_policy;field:browserMaxAge
+  summary: Seconds a visitor's browser may reuse the page without asking. Empty counts as 0.
+- key: table:cdn_cache_policy;field:edgeMaxAge
+  summary: Seconds the CDN may keep its copy, sent as s-maxage. Leave empty to not set one.
+- key: table:cdn_cache_policy;field:staleWhileRevalidate
+  summary: Seconds an out-of-date copy may still be shown while a fresh one is fetched in the background.
+- key: table:cdn_cache_policy;field:staleIfError
+  summary: Seconds an out-of-date copy may be shown if the site is failing to answer.
+- key: table:cdn_cache_policy;field:immutable
+  summary: Tells browsers the content at this address never changes, so they skip rechecking.
+  content: |
+    Only use for files whose address changes when their content does.
+- key: table:cdn_cache_policy;field:noStore
+  summary: Never cache anything that matches this rule. It is sent as private, no-store.
+  content: |
+    The lifetimes on the rule are ignored when this is on.
+- key: table:cdn_cache_policy;field:priority
+  summary: 'Which rule wins when several match: the lowest number goes first. Default {{default:cdn_cache_policy.priority}}.'
+- key: table:cdn_cache_policy;field:enabled
+  summary: Turn off to ignore this rule without deleting it.
+- key: table:cdn_cache_policy;field:seeded
+  summary: Marks example policies created by Create default policies; you cannot edit this flag.
+- key: table:cdn_table_tag_rule;slot:help
+  summary: Says which cache tags and page addresses to purge when a record of a table is changed.
+  content: |
+    When a record in the table changes, the rule works out what to clear. **{{label:cdn_table_tag_rule.tagTemplates}}** are labels attached to cached copies. **{{label:cdn_table_tag_rule.invalidationPaths}}** are paths on the site. Both are filled from the record's own values, for example {slug}, or a related record's values, for example {blog.slug}.
+
+    One line per tag or address. A line is skipped when one of its values is empty. Put hub: in front of an address to mark it as a list page. List pages are only cleared by a manual **Purge From CDN**, not by automatic purges, because path-based providers bill for each path.
+
+    Editing needs the CDN admin permission.
+
+    **How rows get created:** you add one with New for each purgeable table the application lists, or run Create default rules, which adds a tags-only rule for every purgeable table that has none (tags "table:id" and "table"). Add invalidation paths where your CDN purges by path, and a published field so draft edits purge nothing.
+- key: table:cdn_table_tag_rule;field:tableName
+  summary: The table whose changes this rule reacts to. Only tables that are set up as purgeable take effect.
+- key: table:cdn_table_tag_rule;field:tagTemplates
+  summary: Cache tags to clear, one per line, filled in from the record, for example post:{id}.
+  content: |
+    A tag is a lowercase word, a colon, then printable characters without commas, at most 64 characters in all. Tags that do not fit that form are dropped. Providers that purge by path ignore tags.
+- key: table:cdn_table_tag_rule;field:invalidationPaths
+  summary: Page addresses to clear, one per line; patterns may use record fields and a trailing wildcard.
+  content: |
+    Page addresses to clear, one per line, such as /blogs/{blog.slug}/{slug}*.
+
+    Each address must start with /. A trailing * means everything below it. Start a line with hub: for list pages such as /blogs. When there are many paths, the system merges them into wildcards to stay within the CDN's limits.
+- key: table:cdn_table_tag_rule;field:onlyWhenFieldsChange
+  summary: Choose which changed fields trigger an automatic purge; leave empty for any change.
+  content: |
+    Enter comma-separated, case-sensitive field names. Plain names allow only those changes. Prefix a name with ! to ignore it, such as !viewCount. With only ignored names, any other changed field counts; in mixed lists ignored fields never count. This filter applies to updates only. The published-field filter still applies to inserts and deletes.
+- key: table:cdn_table_tag_rule;field:publishedField
+  summary: The yes/no field that marks a record as live, such as isPublished. Unpublished records are ignored.
+  content: |
+    A change counts when the record is published now or was published before the change. So unpublishing a page still clears it, but editing a draft does nothing. Empty means all changes count.
+- key: table:cdn_table_tag_rule;field:enabled
+  summary: Turn off to stop this rule without deleting it.
+- key: table:cdn_purge_request;slot:help
+  summary: 'A record of one clear-the-cache request: what was cleared, why, and whether the CDN accepted it.'
+  content: |
+    Use **{{label:cdn_purge_request.status}}** and **{{label:cdn_purge_request.errorMessage}}** to follow a purge. Automatic changes are gathered within the configured flush window. Manual actions bypass that window, but still need a dispatcher run. Enabled revalidation hooks run before the CDN request.
+
+    Failed requests may retry with backoff. Non-retryable errors or the configured attempt limit make a request Dead. Use **{{label:cdnRetryPurge}}** for Failed, Dead or Deferred requests after resolving the cause.
+
+    **How rows get created:** matching changes to configured purgeable tables, **Purge From CDN**, or **{{label:cdnPurgeHostname}}** record requests for enabled providers. No CDN records a skipped request. Without an enabled provider, no new row is created. You cannot edit these rows by hand.
+- key: table:cdn_purge_request;field:cdnProviderId
+  summary: The CDN provider this request is for.
+- key: table:cdn_purge_request;field:kind
+  summary: Whether the request clears tags, paths or everything (TAG, PATHS or ALL). Set automatically.
+  content: |
+    Providers that cannot purge by tag, such as CloudFront, are sent paths instead.
+- key: table:cdn_purge_request;field:tags
+  summary: The cache tags to clear, one per line.
+- key: table:cdn_purge_request;field:paths
+  summary: 'The page addresses to clear, one per line. Lines starting with hub: are list pages.'
+  content: |
+    Once the request is sent this shows the paths actually used, after merging into wildcards.
+- key: table:cdn_purge_request;field:includeHubs
+  summary: Whether list pages are included. Yes for actions you run, no for automatic purges.
+- key: table:cdn_purge_request;field:billablePaths
+  summary: How many paths this request counts against the monthly invalidation allowance.
+  content: |
+    Set when the request is planned for a provider that bills by path, such as CloudFront. A whole-site purge counts as one.
+- key: table:cdn_purge_request;field:source
+  summary: What caused this request.
+  content: |
+    - **Record change**: someone edited or published a record.
+    - **Record action**: someone ran **Purge From CDN** on a record.
+    - **Manual**: someone ran **{{label:cdnPurgeHostname}}**.
+    - **Deploy**: sent as part of a deployment.
+    - **Retry**: queued again with **{{label:cdnRetryPurge}}**.
+- key: table:cdn_purge_request;field:sourceTable
+  summary: The table of the record that caused this request, if there was one.
+- key: table:cdn_purge_request;field:sourceRecordId
+  summary: The id of the record that caused this request, when it was a single record.
+- key: table:cdn_purge_request;field:requestedBy
+  summary: Who caused the request. Empty for automatic changes made without a signed-in user.
+- key: table:cdn_purge_request;field:status
+  summary: 'Where the request is: Pending, Sent, Succeeded, Failed, Dead and others.'
+  content: |
+    - **Pending**: waiting for the flush window or the next run.
+    - **Merged**: combined into another request, see **Merged Into**.
+    - **Sent** and **In progress**: the CDN accepted it and is clearing copies.
+    - **Succeeded**: the CDN finished.
+    - **Failed (will retry)**: will be tried again after a pause.
+    - **Dead**: gave up after repeated failures; use **{{label:cdnRetryPurge}}**.
+    - **Deferred (budget)**: held because the monthly path budget would be exceeded; retry it later or raise the budget.
+    - **Not sent (hostnames not live)**, **Not sent (no CDN)** and **Not sent (hub pages only)**: recorded but deliberately not sent.
+- key: table:cdn_purge_request;field:mergedIntoId
+  summary: For a merged request, the main request it was combined into.
+- key: table:cdn_purge_request;field:attempts
+  summary: How many times sending was tried.
+- key: table:cdn_purge_request;field:nextAttemptDate
+  summary: When a failed request will next be tried. Empty when nothing is scheduled.
+- key: table:cdn_purge_request;field:providerRequestId
+  summary: The CDN's own id for the request, such as a CloudFront invalidation id. Useful when asking the CDN about it.
+- key: table:cdn_purge_request;field:errorMessage
+  summary: Why the last attempt failed, as reported by the CDN or the revalidation hooks.
+- key: table:cdn_purge_request;field:sentDate
+  summary: When the request was sent to the CDN.
+- key: table:cdn_purge_request;field:completedDate
+  summary: 'When the request reached a final state: finished, dead or deliberately not sent.'
+- key: table:cdn_revalidation_hook;slot:help
+  summary: A call to the website's own servers, made before a purge, so they drop their copies too.
+  content: |
+    If your front end keeps its own cached pages, you can refresh them before clearing the CDN. Before each purge is sent to the CDN, every enabled hook is called with the list of cache tags that changed. If a hook fails, the purge is not sent and is retried later.
+
+    With **{{label:cdn_revalidation_hook.fanOutDns}}** on, the hook is called once for each address behind the host name, so every server hears about it. If a secret is named, the call is signed. The address is checked for safety first: internal addresses are blocked unless configured. Editing needs the CDN admin permission.
+
+    **How rows get created:** you add one with New: the URL, the signature format and the environment variable that holds the signing secret (never the secret). It is optional; add one only when a front end keeps its own cache.
+- key: table:cdn_revalidation_hook;field:name
+  summary: A short name for the receiver, such as Website frontend pods.
+- key: table:cdn_revalidation_hook;field:url
+  summary: The address that is called with a POST. It must answer with a success status.
+  content: |
+    The address is resolved and checked before the call. Redirects are not followed, and replies are read only up to 64 KiB.
+- key: table:cdn_revalidation_hook;field:fanOutDns
+  summary: Call every server address behind the host name, one by one, instead of just one.
+  content: |
+    Use it when the name leads to several servers, such as a Kubernetes headless service, and each keeps its own cache.
+- key: table:cdn_revalidation_hook;field:secretRef
+  summary: The name of the server setting holding the signing key. Not the key itself. Empty sends the call unsigned.
+- key: table:cdn_revalidation_hook;field:timeoutMs
+  summary: How long to wait for each call to finish, in milliseconds. Must be above 0.
+  content: |
+    How long to wait for each call to finish, in milliseconds. Default {{default:cdn_revalidation_hook.timeoutMs}}. Must be above 0.
+- key: table:cdn_revalidation_hook;field:enabled
+  summary: Turn off to skip this hook without deleting it.
+- key: table:cdn_edge_stat_daily;slot:help
+  summary: 'Daily traffic figures for the CDN: requests, data served, cache hit rate and error rates.'
+  content: |
+    One row per provider and day, filled in automatically by **{{label:cdnImportEdgeStats}}** and by a daily job when a scheduler is configured. Each import covers the last 3 complete days and updates rows that already exist. Days are UTC days. You cannot edit these rows.
+
+    Figures come from the CDN's own monitoring. The cache hit rate is only available if the CDN's additional metrics are switched on; otherwise it stays empty.
+
+    **How rows get created:** Import Edge Stats on a provider writes it, and, when a scheduler is configured, a daily run does the same for every provider that supports it. A No CDN provider has no statistics.
+- key: table:cdn_edge_stat_daily;field:cdnProviderId
+  summary: The CDN provider these figures came from.
+- key: table:cdn_edge_stat_daily;field:scope
+  summary: What the figures cover. Currently the whole distribution.
+- key: table:cdn_edge_stat_daily;field:statDate
+  summary: The UTC day the figures are for.
+- key: table:cdn_edge_stat_daily;field:requests
+  summary: How many requests the CDN answered that day.
+- key: table:cdn_edge_stat_daily;field:bytesDownloaded
+  summary: How much data the CDN sent to visitors that day, in bytes.
+- key: table:cdn_edge_stat_daily;field:cacheHitRate
+  summary: The percentage of requests answered from the CDN's copy. Higher is better. Empty when not reported.
+- key: table:cdn_edge_stat_daily;field:error4xxRate
+  summary: The percentage of requests that got a client error such as 404.
+- key: table:cdn_edge_stat_daily;field:error5xxRate
+  summary: The percentage of requests that got a server error. This should stay near zero.
+- key: table:cdn_edge_stat_daily;field:importedDate
+  summary: When these figures were last fetched from the CDN.
+- key: table:cdn_origin_check;slot:help
+  summary: Results of asking a hostname's origin for sample pages and comparing their Cache-Control headers.
+  content: |
+    Use these results to find origin responses with missing or incorrect cache headers.
+
+
+    **How rows get created:** Check Origin Headers on a hostname writes one row per hostname, and, when a scheduler is configured, a nightly run does the same for every hostname that is not Off. It requests the home page, the paths of prefix cache policies and the literal paths of tag rules over HTTPS and counts the right, missing or wrong, and unreadable ones.
+- key: table:cdn_origin_check;field:checkDate
+  summary: When the check ran.
+- key: table:cdn_origin_check;field:scope
+  summary: The hostname whose origin responses were checked.
+- key: table:cdn_origin_check;field:objectsChecked
+  summary: How many sample paths were checked at the origin.
+- key: table:cdn_origin_check;field:correct
+  summary: How many had the correct cache header.
+- key: table:cdn_origin_check;field:missingOrWrong
+  summary: How many had a missing or wrong cache header. These should be fixed.
+- key: table:cdn_origin_check;field:unreadable
+  summary: How many could not be read, so their header is unknown.
+- key: table:cdn_drift_finding;slot:help
+  summary: A difference between how the CDN is actually set up and how it is supposed to be.
+  content: |
+    **{{label:cdnCheckDrift}}** (and a daily job when a scheduler is configured) reads the live CDN settings and compares them with the expected setup defined by the infrastructure code. Each difference becomes a finding with what was expected and what was found.
+
+    A finding stays open until a later check no longer sees it, then it is marked resolved. You cannot edit findings; fix the CDN or the expected setup instead.
+
+    **How rows get created:** Check Config Drift on a provider writes it, and, when a scheduler is configured, a nightly run does the same. It needs the expected configuration in the environment variable the provider names (CDN_EXPECTED_CONFIG by default); a finding is resolved when it no longer appears.
+- key: table:cdn_drift_finding;field:cdnProviderId
+  summary: The CDN provider that was checked.
+- key: table:cdn_drift_finding;field:checkedDate
+  summary: When the difference was last seen.
+- key: table:cdn_drift_finding;field:area
+  summary: What differs, such as aliases, origin.domain, a behavior path or an origin header.
+- key: table:cdn_drift_finding;field:expected
+  summary: What the expected setup says this should be.
+- key: table:cdn_drift_finding;field:actual
+  summary: What the CDN actually has. (missing) means it is not set at all.
+- key: table:cdn_drift_finding;field:severity
+  summary: How serious the difference is. Currently always WARNING.
+- key: table:cdn_drift_finding;field:resolvedDate
+  summary: When a check stopped finding this difference. Empty while the finding is open.
+- key: process:cdnRetryPurge;slot:help
+  summary: Queues failed, dead or deferred purge requests to be sent again.
+  content: |
+    Select purge requests and run it. Only requests that are **Failed**, **Dead** or **Deferred (budget)** are retried; anything else is skipped and reported as unchanged. Review the selected requests before continuing. A retried request has its attempt count reset and its source set to **Retry**. If sending is available, it becomes **Pending** for the next dispatcher run; otherwise its status explains why nothing was sent.
+
+    A deferred request is held back by the monthly path budget, so retrying it only helps if the budget has room or you raised it in the provider's settings.
+
+    Needs the CDN purge permission.
+- key: process:cdnPurgeHostname;slot:help
+  summary: Clears the entire CDN cache for the provider this hostname belongs to.
+  content: |
+    This purges everything the CDN holds, for every hostname on that provider, not only the one you selected. Visitors get fresh pages, but the first requests are slower while the cache refills. For CloudFront it counts as one path of the monthly allowance.
+
+    If you select several hostnames of the same provider, one purge is recorded for it. The request is eligible for the next dispatcher run and is tracked under **CDN Purge Requests**. Use it sparingly; to clear one record, use **Purge From CDN** on that record instead.
+
+    Needs the CDN purge-all permission.
+
+    Review the affected providers before continuing. If no enabled real provider has a Live or Locked hostname with purging enabled, nothing is sent.
+- key: process:cdnDispatchPurges;slot:help
+  summary: Send pending CDN purges and check requests already in progress.
+  content: |
+    Your application schedules this job when a scheduler is configured. It gathers requests within the flush window, calls revalidation hooks, sends purges and retries eligible failures. Check **{{label:cdn_purge_request}}** for the outcome.
+- key: process:cdnTestConnection;slot:help
+  summary: Checks that the CDN can be reached with the saved credentials and records the result on the provider.
+  content: |
+    Select a provider and run it. For CloudFront it checks the credentials, the distribution, access to the invalidation list, and whether the origin verification header is set. The result is saved under **Last Health Status** and **Last Health Message**, and a pass saves the reported DNS target and origin when available.
+
+    Providers that cannot be tested, such as No CDN, are skipped. It reads from the CDN and changes nothing there. Needs the CDN admin permission.
+- key: process:cdnImportEdgeStats;slot:help
+  summary: Fetches the last 3 complete days of traffic figures from the CDN and saves them.
+  content: |
+    Select a provider and run it. It reads daily requests, data served, cache hit rate and error rates from the CDN's monitoring and adds or updates one row per day in **CDN Edge Stats**. With a scheduler configured, a daily job does this automatically, so you only need it to refresh now.
+
+    Only CloudFront supports it; other providers are skipped. Needs the CDN admin permission.
+- key: process:cdnCheckDrift;slot:help
+  summary: Compares the live CDN setup with the expected setup and records any differences.
+  content: |
+    Select a provider and run it. It reads the CDN's current configuration and compares it with the expected setup that the infrastructure code provides to the server. New differences are added to **CDN Drift Findings**; findings that no longer apply are marked resolved.
+
+    If the expected setup is not provided to the server, the check fails with a message saying so. Only CloudFront supports it. With a scheduler configured, a daily job runs the same check. Needs the CDN admin permission.
+- key: process:cdnScheduledImportEdgeStats;slot:help
+  summary: Import recent CDN traffic statistics on the configured schedule.
+  content: |
+    When your application configures a scheduler, this job imports the last three complete UTC days for enabled providers that support statistics. Use **{{label:cdnImportEdgeStats}}** to refresh on demand.
+- key: process:cdnScheduledCheckDrift;slot:help
+  summary: Check enabled CDN providers for configuration drift on the configured schedule.
+  content: |
+    When your application configures a scheduler, this job updates drift findings for supported providers. Connection health is checked separately by central System Health. Use **{{label:cdnCheckDrift}}** to check drift on demand.
+- key: widget:cdnHome;slot:label
+  summary: 'The CDN at a glance: provider, hostnames, traffic, purge activity, invalidation budget, origin checks and
+    drift.'
+  content: |
+    Each card says plainly when there is nothing yet, for example when no CDN is connected or no statistics have been imported. Traffic figures cover the last 7 and 30 days; purge failures cover 24 hours and 7 days.
+- key: possibleValueSource:cdn_provider_type;slot:help
+  summary: The CDN services a provider can be.
+  content: |
+    - **Amazon CloudFront**: supported. Purges by path, with connection test, traffic import and drift check.
+    - **Souin (self-hosted)**: supported. Purges by cache tag through its own API.
+    - **No CDN**: nothing is sent; purge requests are only recorded.
+    - **Cloudflare**, **Fastly**, **Bunny.net** and **Varnish (self-hosted)**: listed, but not yet usable for purging.
+- key: possibleValueSource:cdn_hostname_stage;slot:help
+  summary: How far a hostname is along in being switched over to the CDN.
+  content: |
+    - **Off**: not using the CDN. If every hostname is Off, purges are not sent.
+    - **Headers only**: preparation step; purges are not sent yet.
+    - **Live**: in use; purges are sent.
+    - **Locked to CDN**: the final step; purges are sent.
+- key: possibleValueSource:cdn_purge_status;slot:help
+  summary: The stage of a purge request.
+  content: |
+    - **Pending**: waiting to be sent.
+    - **Merged**: combined into another request.
+    - **Sent**: handed to the CDN.
+    - **In progress**: the CDN is still clearing copies.
+    - **Succeeded**: finished.
+    - **Failed (will retry)**: failed, will be tried again.
+    - **Dead**: failed too many times; use **{{label:cdnRetryPurge}}**.
+    - **Deferred (budget)**: held back by the monthly path budget.
+    - **Not sent (hostnames not live)**: no hostname is Live yet.
+    - **Not sent (no CDN)**: the provider is No CDN.
+    - **Not sent (hub pages only)**: only list pages were affected, and automatic purges skip those.
+- key: possibleValueSource:cdn_purge_source;slot:help
+  summary: What caused a purge request.
+  content: |
+    - **Record change**: a record was edited or published.
+    - **Record action**: someone ran Purge From CDN on a record.
+    - **Manual**: someone ran Purge Everything.
+    - **Deploy**: part of a deployment.
+    - **Retry**: queued again with Retry Purge.
+- key: possibleValueSource:cdn_policy_class;slot:help
+  summary: The kind of content a cache rule is for.
+  content: |
+    - **Immutable**: files whose address changes when the content does, safe to keep a long time.
+    - **Leaf**: a single page or record.
+    - **Hub**: a list page that changes when any of its items do.
+    - **Never cache**: private or live content that must not be kept.
+- key: table:cdn_revalidation_hook;field:signatureFormat
+  summary: The signing format expected by the revalidation endpoint.
+  content: |
+    New hooks default to Standard Webhooks. Choose Legacy only for an endpoint expecting the older signature format. Signing uses **{{label:cdn_revalidation_hook.secretRef}}**.
+- key: table:cdn_revalidation_hook;field:allowPlainHttp
+  summary: Allow this hook to call an HTTP endpoint without TLS; off by default.
+  content: |
+    Leave this off for HTTPS endpoints. Enabling it does not remove the internal-address checks.
+- key: table:cdn_revalidation_hook;field:internalAllowlist
+  summary: Explicit exceptions to the hook's internal-address restrictions.
+  content: |
+    Separate IP addresses, CIDR blocks, exact host names or host suffixes beginning with a dot with commas or whitespace. Leave empty when the endpoint does not require access to an internal destination. Cloud metadata and unspecified addresses remain blocked.
+- key: process:cdnCheckOrigin;slot:help
+  summary: Check sample origin responses for the expected cache headers.
+  content: |
+    Select hostnames and review the preview before continuing. You can then inspect **{{label:cdn_origin_check}}** for counts of correct, missing or wrong, and unreadable responses. The check uses HTTPS and samples the home page, prefix policy paths and literal tag-rule paths. It reads responses and does not change the origin.
+- key: process:cdnScheduledCheckOrigin;slot:help
+  summary: Check origin cache headers for hostnames that are not Off.
+  content: |
+    When your application configures a scheduler, this job checks hostnames that are not Off. You can run **{{label:cdnCheckOrigin}}** on demand and inspect **{{label:cdn_origin_check}}** for results.
+- key: process:cdnCreateDefaultProvider;slot:help
+  summary: Add a No CDN provider so you can record purges before connecting a real CDN.
+  content: |
+    Review the proposed provider before continuing. You get **No CDN (record only)** if no No CDN provider exists. Existing rows are never changed. You need CDN admin permission.
+- key: process:cdnCreateDefaultPolicies;slot:help
+  summary: Add two disabled cache policy examples for you to review and configure.
+  content: |
+    Review the static-assets and never-cache examples before continuing. Only missing examples are added, by name; existing rows are never changed. Edit their matches and lifetimes before enabling them. Policies affect responses only where your application integrates the CDN header policy. You need CDN admin permission.
+- key: process:cdnCreateDefaultRules;slot:help
+  summary: Add a tag rule for each configured purgeable table that has no rule.
+  content: |
+    Review the proposed rules before continuing. Existing rules, including disabled ones, are left alone. New rules contain tags but no invalidation paths. Add paths if your provider purges by path, and configure a published field if draft changes should be ignored. You need CDN admin permission.
+- key: app:cdnAdmin;slot:purgeRecords
+  summary: Clear cached copies associated with the records you select.
+  content: |
+    Use **Purge From CDN** when cached content needs refreshing. Review the selected records and planned tags and paths before continuing. This action does not change your records. Manual purges include hub paths and bypass automatic change filters. Follow requests in **{{label:cdn_purge_request}}**. Sending still requires an enabled real provider, a Live or Locked hostname with purging enabled, and a dispatcher run. You need CDN purge permission.
+- key: possibleValueSource:cdn_signature_format;slot:help
+  summary: Choose the signing format your revalidation endpoint expects.
+  content: |
+    Use Standard Webhooks for new endpoints, or Legacy for a receiver expecting the older signature. You must configure a signing secret to send signed calls.
+- key: possibleValueSource:cdn_provider;slot:help
+  summary: Choose the CDN provider this record belongs to.
+  content: |
+    Choose a connection from **{{label:cdn_provider}}**. Configure that provider before using it for purges or checks.
+- key: possibleValueSource:cdn_hostname;slot:help
+  summary: Choose the hostname this cache policy applies to.
+  content: |
+    Choose a hostname from **{{label:cdn_hostname}}**, or leave the policy hostname empty to apply it across hostnames.

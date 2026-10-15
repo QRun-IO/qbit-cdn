@@ -50,7 +50,7 @@ import com.kingsrook.qqq.backend.core.utils.ValueUtils;
  *******************************************************************************/
 public record CdnHomeData(List<ProviderView> providers, List<HostnameView> hostnames, List<StatView> stats, List<QRecord> recentPurges,
                           int failed24h, int dead24h, int failed7d, int dead7d, List<BudgetView> budgets, List<QRecord> originChecks,
-                          Map<String, Integer> openDriftByArea, Instant lastDriftCheck, Instant now)
+                          Map<String, Integer> openDriftByArea, Instant lastDriftCheck, Instant now, List<CdnSetupStatus.Item> setup)
 {
    public static final int ROTATION_WARNING_DAYS = 75;
    public static final int ROTATION_DAYS         = 90;
@@ -237,7 +237,7 @@ public record CdnHomeData(List<ProviderView> providers, List<HostnameView> hostn
       }
 
       return (new CdnHomeData(providers, hostnames, stats, recent, failed24, dead24, failed7, dead7, budgets, new ArrayList<>(latestOrigin.values()),
-         drift, lastDrift, now));
+         drift, lastDrift, now, CdnSetupStatus.load()));
    }
 
 

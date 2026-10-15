@@ -43,8 +43,11 @@ centrally with `health_check.enabled`.
 Details contain only provider type, a known provider status (or UNKNOWN), and
 whether the origin header is configured. The manual `cdnTestConnection` action
 and its `lastHealth*` fields remain; the daily scheduled step checks drift only.
-The host must use a QQQ build containing the central health SPI (currently the
-locally installed `4.1.0-SNAPSHOT`).
+The host must use QQQ **4.1.0-RC.8** or later for the central health SPI.
+
+## Setup
+
+This qbit ships no DDL and seeds nothing from a changelog (a host chooses its own column names). Open the CDN app: the Setup card lists each part with the next step. On a fresh install run **Create default provider** (No CDN: purges are recorded, nothing is sent), **Create default rules** (tags for every purgeable table), and optionally **Create default policies** (two turned-off examples). Add your CDN and hostnames when you have them. Cache policies change a response only where the application calls `CdnResponseHeaderPolicy.decide`. **Check Origin Headers** on a hostname (and the nightly run) asks the origin, the provider's `originHost` when set, for the home page, prefix policy paths and literal tag-rule paths, and records how many have the right Cache-Control.
 
 ## Tag rules
 
@@ -89,7 +92,7 @@ variable named by the provider setting `expectedConfigEnv`).
 
 ## Revalidation hooks
 
-Requires QQQ **4.1.0-RC.5** (the default `qqq-snapshot` profile imports the released BOM;
+Requires QQQ **4.1.0-RC.8** (the default `qqq-snapshot` profile imports the released BOM;
 its historical property name does not select a core SNAPSHOT).
 
 New `cdn_revalidation_hook` rows default `signatureFormat` to `STANDARD_WEBHOOKS`;
@@ -117,6 +120,26 @@ old receivers; configure internal network exceptions explicitly before dispatch.
 See [receiver migration](docs/revalidation-hook-migration.md) for the inspected
 KoF22 receiver and exact changes required.
 
+## In-app help
+
+The qbit registers [help/qbit-cdn.yaml](src/main/resources/help/qbit-cdn.yaml)
+as a `QBIT` bundle, versioned with the current POM version (`0.1.0-SNAPSHOT`).
+QQQ 4.1.0-RC.7 syncs it at startup when the host installs the help tables;
+registration is harmless without them. Keep the literal bundle version in step
+with the POM when releasing.
+
+Hosts can register their own YAML with `layer: HOST` using
+`HelpBundles.register(qInstance, "help/my-host.yaml")`. Entries with the same
+key and role override this bundle; user-edited help retains priority. Use the
+configured app name and concrete `cdnPurge_<table>` process keys for overrides.
+The qbit binds the shared `app:cdnAdmin;slot:purgeRecords` text to each configured
+record action and adapts app entries when the host changes the app name.
+
+`CdnHelpBundleTest` uses `HelpBundleAssertions` to check the shipped resource and
+the registered bundle with a custom app name and generated record actions.
+It checks live references, summaries, all owned tables, fields and processes,
+and additionally requires help for widgets and possible-value sources.
+
 ## Build
 
 ```sh
@@ -138,6 +161,5 @@ for enabled providers remain visible with `SKIPPED_NONE_PROVIDER` or
 The home Connection card explains the unconfigured state, and purge
 activity labels recorded-only requests when disconnected.
 
-This version does not run origin header checks. The Origin headers card says
-nothing has been checked until the host application writes results to the
-standard `cdn_origin_check` table; those results continue to appear normally.
+Run **Check Origin Headers** on a hostname to populate origin-check results.
+When a scheduler is configured, a nightly job also checks hostnames that are not Off.
