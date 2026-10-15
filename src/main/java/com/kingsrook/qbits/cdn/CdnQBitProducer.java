@@ -162,7 +162,7 @@ public class CdnQBitProducer implements QBitMetaDataProducer<CdnQBitConfig>
       }
       output.add(CdnWidgets.app(qBitConfig, tables));
       output.addSelfToInstance(qInstance);
-      com.kingsrook.qbits.cdn.model.CdnHelp.apply(qInstance, qBitConfig.getAppName());
+      com.kingsrook.qbits.cdn.model.CdnHelp.register(qInstance, qBitConfig);
 
       if(!qBitConfig.getPurgeableTables().isEmpty())
       {
