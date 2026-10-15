@@ -34,7 +34,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 
 /*******************************************************************************
- ** The CDN home and Health card: honest empty states, then real data.
+ ** The CDN home: honest empty states, then real data.
  *******************************************************************************/
 class CdnHomeTest
 {
@@ -61,7 +61,6 @@ class CdnHomeTest
       assertThat(html).contains("No CDN provider configured: purges are recorded only.").contains("No edge statistics yet.").contains("No purges recorded yet.")
          .contains("No path-billed provider connected yet.").contains("No origin check yet.").contains("Nothing to compare yet.")
          .contains("minmax(min(100%,22rem),1fr)");
-      assertThat(render(CdnWidgets.HEALTH_CARD_WIDGET)).contains("No CDN provider configured: purges are recorded only.").contains("href=\"/cdnAdmin\"");
    }
 
 
@@ -91,7 +90,6 @@ class CdnHomeTest
       CdnTestSupport.insert(CdnTables.DRIFT_FINDING, new QRecord().withValue("cdnProviderId", provider).withValue("area", "BEHAVIOR").withValue("checkedDate", CdnTestSupport.NOW));
 
       CdnHomeData data = CdnHomeData.load();
-      assertEquals("ATTENTION", data.overallState());
       assertEquals(1, data.dead24h());
       assertEquals(4, data.budgets().get(0).billed());
       assertEquals(age, data.providers().get(0).credentialAgeDays());
@@ -100,7 +98,6 @@ class CdnHomeTest
       assertThat(html).contains("d1.cloudfront.net").contains(age + " days (rotate every 90) - rotation due").contains("1,500").contains("91.5%")
          .contains("<polyline").contains("396 of 396").contains("BEHAVIOR").contains("1 open").contains("/cdnAdmin/cdn_purge_request/")
          .contains("www.example.com").doesNotContain("recorded only (not sent)", "nothing has been checked");
-      assertThat(CdnHomeView.renderHealthCard(data, "/cdnAdmin")).contains("Needs attention");
    }
 
 
@@ -142,7 +139,6 @@ class CdnHomeTest
          assertThat(render(CdnWidgets.HOME_WIDGET)).contains("No CDN provider configured: purges are recorded only.")
             .contains("The CloudFront distribution is created in the cutover window.").contains("recorded only (not sent)")
             .contains("No origin check yet.");
-         assertThat(render(CdnWidgets.HEALTH_CARD_WIDGET)).contains("No CDN provider configured: purges are recorded only.");
       }
    }
 

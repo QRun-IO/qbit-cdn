@@ -37,13 +37,12 @@ import com.kingsrook.qqq.backend.core.model.metadata.tables.QTableMetaData;
 
 /*******************************************************************************
  ** The Admin -> CDN app: a home widget (the single owner of CDN data), four
- ** sections of standard tables, and a status card for the app's Health page.
+ ** sections of standard tables.
  ** Processes are never added to the nav.
  *******************************************************************************/
 public final class CdnWidgets
 {
-   public static final String HOME_WIDGET        = "cdnHome";
-   public static final String HEALTH_CARD_WIDGET = "cdnHealthCard";
+   public static final String HOME_WIDGET = "cdnHome";
 
 
 
@@ -63,9 +62,7 @@ public final class CdnWidgets
    {
       return (List.of(
          new QWidgetMetaData().withName(HOME_WIDGET).withLabel("CDN").withType(WidgetType.HTML.getType())
-            .withCodeReference(new QCodeReference(HomeRenderer.class)).withGridColumns(12).withIsCard(false).withPermissionRules(CdnTables.permissionRules()),
-         new QWidgetMetaData().withName(HEALTH_CARD_WIDGET).withLabel("CDN").withType(WidgetType.HTML.getType())
-            .withCodeReference(new QCodeReference(HealthCardRenderer.class)).withGridColumns(12).withIsCard(true).withPermissionRules(CdnTables.permissionRules())));
+            .withCodeReference(new QCodeReference(HomeRenderer.class)).withGridColumns(12).withIsCard(false).withPermissionRules(CdnTables.permissionRules())));
    }
 
 
@@ -130,23 +127,6 @@ public final class CdnWidgets
       public RenderWidgetOutput render(RenderWidgetInput input) throws QException
       {
          return (new RenderWidgetOutput(new RawHTML(null, CdnHomeView.render(CdnHomeData.load(), tablePathPrefix()))));
-      }
-   }
-
-
-
-   /*******************************************************************************
-    ** Health status card renderer.
-    *******************************************************************************/
-   public static class HealthCardRenderer extends AbstractWidgetRenderer
-   {
-      /*******************************************************************************
-       ** Render.
-       *******************************************************************************/
-      @Override
-      public RenderWidgetOutput render(RenderWidgetInput input) throws QException
-      {
-         return (new RenderWidgetOutput(new RawHTML("CDN", CdnHomeView.renderHealthCard(CdnHomeData.load(), appPath()))));
       }
    }
 }

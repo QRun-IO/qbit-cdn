@@ -324,7 +324,7 @@ entries:
   content: |
     **{{label:cdnCheckDrift}}** (and a daily job when a scheduler is configured) reads the live CDN settings and compares them with the expected setup defined by the infrastructure code. Each difference becomes a finding with what was expected and what was found.
 
-    A finding stays open until a later check no longer sees it, then it is marked resolved. Open findings turn the CDN status on the Health screen to needing attention. You cannot edit findings; fix the CDN or the expected setup instead.
+    A finding stays open until a later check no longer sees it, then it is marked resolved. You cannot edit findings; fix the CDN or the expected setup instead.
 
     **How rows get created:** Check Config Drift on a provider writes it, and, when a scheduler is configured, a nightly run does the same. It needs the expected configuration in the environment variable the provider names (CDN_EXPECTED_CONFIG by default); a finding is resolved when it no longer appears.
 - key: table:cdn_drift_finding;field:cdnProviderId
@@ -386,18 +386,14 @@ entries:
   content: |
     When your application configures a scheduler, this job imports the last three complete UTC days for enabled providers that support statistics. Use **{{label:cdnImportEdgeStats}}** to refresh on demand.
 - key: process:cdnScheduledCheckDrift;slot:help
-  summary: Test enabled CDN providers and check their configuration on the configured schedule.
+  summary: Check enabled CDN providers for configuration drift on the configured schedule.
   content: |
-    When your application configures a scheduler, this job updates connection health and drift findings for supported providers. Use **{{label:cdnCheckDrift}}** to check drift on demand.
+    When your application configures a scheduler, this job updates drift findings for supported providers. Connection health is checked separately by central System Health. Use **{{label:cdnCheckDrift}}** to check drift on demand.
 - key: widget:cdnHome;slot:label
   summary: 'The CDN at a glance: provider, hostnames, traffic, purge activity, invalidation budget, origin checks and
     drift.'
   content: |
     Each card says plainly when there is nothing yet, for example when no CDN is connected or no statistics have been imported. Traffic figures cover the last 7 and 30 days; purge failures cover 24 hours and 7 days.
-- key: widget:cdnHealthCard;slot:label
-  summary: 'A one-line CDN status for the Health screen: not connected, needs attention, or all checks OK.'
-  content: |
-    It needs attention when a purge went dead in the last 24 hours, a drift finding is open, the last connection test failed, the credentials are 75 or more days old, or this month's billed paths passed the soft limit.
 - key: possibleValueSource:cdn_provider_type;slot:help
   summary: The CDN services a provider can be.
   content: |

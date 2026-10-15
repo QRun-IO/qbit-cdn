@@ -52,6 +52,7 @@ class CdnQBitProducerTest
       assertThat(instance.getProcess(CdnProcesses.PURGE_HOSTNAME)).isNotNull();
       assertThat(instance.getProcess(CdnProcesses.DISPATCH_PURGES).getIsHidden()).isTrue();
       assertThat(instance.getWidget(CdnWidgets.HOME_WIDGET)).isNotNull();
+      assertThat(instance.getWidget("cdnHealthCard")).isNull();
       assertThat(instance.getApp("cdnAdmin").getSections()).extracting(section -> section.getLabel())
          .containsExactly("Connection", "Settings", "Activity", "Performance");
       assertThat(instance.getRecordChangeListeners()).isNotEmpty();
