@@ -5,12 +5,14 @@ All notable changes to this project are documented here. The format follows Keep
 ## [0.1.1] - Unreleased
 
 ### Added
+- Ship the host-neutral in-app help bundle with QQQ registration, live references, and coverage checks for all CDN metadata and generated purge actions. Hosts can override entries with a HOST bundle.
 - Origin header check: Check Origin Headers on Hostnames (and a nightly run over hostnames that are not Off) asks the origin for sample pages and writes `cdn_origin_check` rows. The table had no writer before.
 - Guided empty states: help bundle `help/qbit-cdn.yaml` (app and all nine tables, with "How rows get created") applied by `CdnHelp`, and a Setup card on the CDN home.
 - "Create default provider" (No CDN), "Create default policies" (two turned-off examples) and "Create default rules" (a tags-only rule per purgeable table) table actions; all insert-only.
 - `hostnameRole` is documented as a label that changes nothing; cache policies are documented as applying only where the application calls `CdnResponseHeaderPolicy`.
 
 ### Changed
+- Pin the released QQQ BOM to 4.1.0-RC.7 and replace the temporary help loader with the core bundle registry.
 - Require released QQQ BOM 4.1.0-RC.5; revalidation hooks default to core Standard Webhooks signing. Per-hook `signatureFormat=LEGACY` preserves the prior header and signature bytes.
 - Use core `SafeHttpClient` for revalidation requests: HTTPS/public targets by default, explicit `allowPlainHttp`/`internalAllowlist` exceptions, bounded responses and checked DNS pinning. Fan-out preserves Host/TLS identity. Host schema migration and receiver migration are described in README and `docs/revalidation-hook-migration.md`.
 
