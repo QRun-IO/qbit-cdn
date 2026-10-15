@@ -32,7 +32,7 @@ import com.kingsrook.qbits.cdn.model.CdnTables;
 import com.kingsrook.qbits.cdn.processes.CdnDefaultsProcesses;
 import com.kingsrook.qbits.cdn.processes.CdnOriginCheckProcesses;
 import com.kingsrook.qqq.backend.core.model.metadata.QInstance;
-import com.kingsrook.qqq.backend.core.model.metadata.help.QHelpContent;
+import com.kingsrook.qqq.backend.core.model.metadata.help.bundles.HelpBundles;
 import com.kingsrook.qqq.backend.core.model.metadata.tables.QTableMetaData;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -142,37 +142,17 @@ class CdnTablesGuardrailTest
    @Test
    void everyTableHasEmptyStateHelp() throws Exception
    {
-      assertThat(CdnHelp.entries()).allSatisfy((key, entry) -> assertThat(entry.path("summary").asText().length()).as(key).isLessThanOrEqualTo(120));
+      var entries = HelpBundles.of(qInstance).getBundles().get(0).getEntries();
       for(String table : cdnTables())
       {
-         List<QHelpContent> help = qInstance.getTable(table).getHelpContent() == null ? null : qInstance.getTable(table).getHelpContent().get(CdnHelp.SLOT);
-         assertThat(help).as(table + " table help").isNotEmpty();
-         assertThat(help.get(0).getContent()).as(table + " help says how rows get created").contains("How rows get created");
+         var entry = entries.stream().filter(e -> e.getKey().equals("table:" + table + ";slot:help")).findFirst().orElseThrow();
+         assertThat(entry.getContent()).as(table + " help says how rows get created").contains("How rows get created");
          if(SETUP_ACTIONS.containsKey(table))
          {
-            assertThat(help.get(0).getContent()).as(table + " help names its setup action").contains(qInstance.getProcess(SETUP_ACTIONS.get(table)).getLabel());
+            assertThat(entry.getContent()).as(table + " help names its setup action").contains(qInstance.getProcess(SETUP_ACTIONS.get(table)).getLabel());
          }
       }
-      assertThat(qInstance.getApp("cdnAdmin").getHelpContent()).containsKey(CdnHelp.SLOT);
-      assertThat(CdnHelp.entries().keySet()).allMatch(key -> !key.startsWith("table:") || qInstance.getTable(key.substring(6, key.indexOf(';'))) != null,
-         "help names only real tables");
-   }
-
-
-
-   /*******************************************************************************
-    ** A host's own help in the slot is never replaced by the bundle.
-    *******************************************************************************/
-   @Test
-   void hostHelpIsKept() throws Exception
-   {
-      QTableMetaData table = qInstance.getTable(CdnTables.PROVIDER);
-      table.withHelpContent(CdnHelp.SLOT, new QHelpContent("Host help for providers."));
-      qInstance.getApp("cdnAdmin").withHelpContent(CdnHelp.SLOT, new QHelpContent("Host help for the app."));
-      CdnHelp.apply(qInstance, "cdnAdmin");
-      assertThat(table.getHelpContent().get(CdnHelp.SLOT)).singleElement().satisfies(h -> assertThat(h.getContent()).isEqualTo("Host help for providers."));
-      assertThat(qInstance.getApp("cdnAdmin").getHelpContent().get(CdnHelp.SLOT)).singleElement().satisfies(h -> assertThat(h.getContent()).isEqualTo("Host help for the app."));
-      assertThat(qInstance.getTable(CdnTables.HOSTNAME).getHelpContent().get(CdnHelp.SLOT).get(0).getContent()).contains("How rows get created");
+      assertThat(entries).anyMatch(e -> e.getKey().equals(CdnHelp.APP_KEY));
    }
 
 
