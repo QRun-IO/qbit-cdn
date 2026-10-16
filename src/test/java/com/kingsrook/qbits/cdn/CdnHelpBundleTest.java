@@ -65,7 +65,7 @@ class CdnHelpBundleTest
       assertThat(instance.getTable("helpContent")).isNull();
       var bundle = HelpBundles.of(instance).getBundles().get(0);
       assertThat(bundle.getId()).isEqualTo("qbit-cdn");
-      assertThat(bundle.getVersion()).isEqualTo("0.1.0-SNAPSHOT");
+      assertThat(bundle.getVersion()).as("the help bundle carries the artifact version").isEqualTo(System.getProperty("qbit.artifactVersion")).isEqualTo(CdnQBitProducer.VERSION);
       assertThat(bundle.getLayer()).isEqualTo(HelpBundleLayer.QBIT);
       assertThat(bundle.getEntries()).extracting(entry -> entry.getKey()).doesNotHaveDuplicates();
       // Core's gate does not require widgets or possible-value sources yet.

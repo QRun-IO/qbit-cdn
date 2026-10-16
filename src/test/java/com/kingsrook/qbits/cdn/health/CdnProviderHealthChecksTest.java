@@ -26,6 +26,8 @@ import java.util.concurrent.TimeUnit;
 import com.kingsrook.qbits.cdn.CdnRuntime;
 import com.kingsrook.qbits.cdn.CdnTestSupport;
 import com.kingsrook.qbits.cdn.model.CdnTables;
+import com.kingsrook.qbits.cdn.spi.CdnHealth;
+import com.kingsrook.qbits.cdn.spi.CdnHealthProbe;
 import com.kingsrook.qbits.cdn.spi.CdnOperations;
 import com.kingsrook.qbits.cdn.spi.CdnProviderConfig;
 import com.kingsrook.qbits.cdn.spi.CdnProviderType;
@@ -168,12 +170,76 @@ class CdnProviderHealthChecksTest
    {
       var check = check().getCheckInstance();
       update(new QRecord().withValue("providerType", "NONE"));
-      assertThat(check.run(input()).getStatus()).isEqualTo(HealthStatus.UNKNOWN);
+      HealthCheckOutcome none = check.run(input());
+      assertThat(none.getStatus()).isEqualTo(HealthStatus.UP);
+      assertThat(none.getMessage()).isEqualTo("No CDN configured; purges are recorded only");
+      assertThat(none.getDetails().getValues()).containsEntry("testable", false).containsEntry("providerType", "NONE");
+      update(new QRecord().withValue("providerType", "SOUIN"));
+      HealthCheckOutcome souin = check.run(input());
+      assertThat(souin.getStatus()).isEqualTo(HealthStatus.UP);
+      assertThat(souin.getDetails().getValues()).containsEntry("testable", false).containsEntry("reason", "provider type has no connection test");
       update(new QRecord().withValue("enabled", false));
       assertThat(check.run(input()).getStatus()).isEqualTo(HealthStatus.UNKNOWN);
       new DeleteAction().execute(new DeleteInput(CdnTables.PROVIDER).withPrimaryKeys(List.of(providerId)));
       assertThat(check.run(input()).getStatus()).isEqualTo(HealthStatus.UNKNOWN);
       verify(adapter, never()).connectionTest(any());
+   }
+
+
+
+   /*******************************************************************************
+    ** An adapter's own health probe wins over the connection test; its state,
+    ** message and details pass through with the provider type added.
+    *******************************************************************************/
+   @Test
+   void healthProbePreferred() throws Exception
+   {
+      ProbingProvider probing = new ProbingProvider();
+      CdnRuntime.registerProvider(CdnProviderType.CLOUDFRONT, () -> probing);
+      var check = check().getCheckInstance();
+      for(CdnHealth.State state : CdnHealth.State.values())
+      {
+         probing.health = new CdnHealth(state, "probe " + state, Map.of("testable", false));
+         HealthCheckOutcome outcome = check.run(input());
+         assertThat(outcome.getStatus()).isEqualTo(HealthStatus.valueOf(state.name()));
+         assertThat(outcome.getMessage()).isEqualTo("probe " + state);
+         assertThat(outcome.getDetails().getValues()).containsExactlyInAnyOrderEntriesOf(Map.of("providerType", "CLOUDFRONT", "testable", false));
+      }
+      assertThat(probing.connectionTests).isZero();
+   }
+
+
+
+   /*******************************************************************************
+    ** The fake path adapter plus a health probe.
+    *******************************************************************************/
+   private static class ProbingProvider extends CdnTestSupport.FakePathProvider implements CdnHealthProbe
+   {
+      private CdnHealth health;
+      private int       connectionTests;
+
+
+
+      /*******************************************************************************
+       ** The configured answer.
+       *******************************************************************************/
+      @Override
+      public CdnHealth checkHealth(CdnProviderConfig config)
+      {
+         return (health);
+      }
+
+
+
+      /*******************************************************************************
+       ** Counted so the test can prove it is not used.
+       *******************************************************************************/
+      @Override
+      public ConnectionTest connectionTest(CdnProviderConfig config)
+      {
+         connectionTests++;
+         return (super.connectionTest(config));
+      }
    }
 
 

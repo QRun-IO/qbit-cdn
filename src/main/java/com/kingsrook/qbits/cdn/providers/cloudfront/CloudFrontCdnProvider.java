@@ -22,14 +22,18 @@ import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.OptionalDouble;
 import java.util.Set;
 import java.util.TreeMap;
 import com.kingsrook.qbits.cdn.spi.CdnCapability;
 import com.kingsrook.qbits.cdn.spi.CdnEdgeStat;
 import com.kingsrook.qbits.cdn.spi.CdnException;
 import com.kingsrook.qbits.cdn.spi.CdnHeaderDialect;
+import com.kingsrook.qbits.cdn.spi.CdnHealth;
+import com.kingsrook.qbits.cdn.spi.CdnHealthProbe;
 import com.kingsrook.qbits.cdn.spi.CdnProviderConfig;
 import com.kingsrook.qbits.cdn.spi.CdnProviderInterface;
 import com.kingsrook.qbits.cdn.spi.CdnProviderType;
@@ -41,6 +45,8 @@ import software.amazon.awssdk.core.exception.SdkException;
 import software.amazon.awssdk.services.cloudfront.CloudFrontClient;
 import software.amazon.awssdk.services.cloudfront.model.CreateInvalidationResponse;
 import software.amazon.awssdk.services.cloudfront.model.Distribution;
+import software.amazon.awssdk.services.cloudfront.model.GetDistributionConfigRequest;
+import software.amazon.awssdk.services.cloudfront.model.GetDistributionRequest;
 import software.amazon.awssdk.services.cloudfront.model.GetInvalidationResponse;
 import software.amazon.awssdk.services.cloudwatch.CloudWatchClient;
 import software.amazon.awssdk.services.cloudwatch.model.Dimension;
@@ -70,7 +76,7 @@ import software.amazon.awssdk.services.cloudwatch.model.ScanBy;
  ** {@link #testConnection}, {@link #importStats} and {@link #readConfig}
  ** (compare the result with {@link CloudFrontDriftCheck#compare}).</p>
  *******************************************************************************/
-public class CloudFrontCdnProvider implements CdnProviderInterface, com.kingsrook.qbits.cdn.spi.CdnOperations
+public class CloudFrontCdnProvider implements CdnProviderInterface, com.kingsrook.qbits.cdn.spi.CdnOperations, CdnHealthProbe
 {
    /** Default origin custom header that proves a request came through CloudFront. */
    public static final String DEFAULT_ORIGIN_VERIFY_HEADER = "X-Origin-Verify";
@@ -80,6 +86,22 @@ public class CloudFrontCdnProvider implements CdnProviderInterface, com.kingsroo
 
    static final String STATUS_COMPLETED = "Completed";
    static final int    SECONDS_PER_DAY  = 86_400;
+
+   /** Distribution states CloudFront reports (anything else is reported as UNKNOWN). */
+   static final String STATUS_DEPLOYED    = "Deployed";
+   static final String STATUS_IN_PROGRESS = "InProgress";
+
+   /** 5xx error rate (percent, CloudWatch 5xxErrorRate) above which the health check is DEGRADED. */
+   static final double ERROR_RATE_5XX_DEGRADED_PERCENT = 5.0;
+
+   /** How far back the health check averages the 5xx error rate. */
+   static final int ERROR_RATE_WINDOW_MINUTES = 30;
+
+   /** CloudWatch period for the health check's 5xx error rate. */
+   static final int ERROR_RATE_PERIOD_SECONDS = 300;
+
+   /** Health message when the credentials cannot read the distribution status. */
+   static final String NOT_TESTABLE_MESSAGE = "CloudFront configured; distribution status not testable with current permissions";
 
    private static final Set<String> RETRYABLE_CODES = Set.of(
       "TooManyInvalidationsInProgress", "Throttling", "ThrottlingException", "RequestLimitExceeded", "ServiceUnavailable", "InternalError");
@@ -279,6 +301,181 @@ public class CloudFrontCdnProvider implements CdnProviderInterface, com.kingsroo
 
 
    /*******************************************************************************
+    ** Central health probe. GetDistribution gives existence, Enabled and the
+    ** deployment Status: UP when enabled and Deployed, DEGRADED while
+    ** InProgress, DOWN when missing or disabled. The section 7.5 IAM policy
+    ** grants GetDistributionConfig but not GetDistribution, so on AccessDenied
+    ** this falls back to GetDistributionConfig (existence and Enabled, no
+    ** Status) and reports {@code testable=false}. If neither read is permitted
+    ** it reports UP with {@code testable=false}: UNKNOWN never alerts anyone,
+    ** and failed invalidations still show up as FAILED/DEAD purge requests.
+    ** The CloudWatch 5xxErrorRate over the last
+    ** {@value #ERROR_RATE_WINDOW_MINUTES} minutes is added when readable and
+    ** makes the check DEGRADED above {@value #ERROR_RATE_5XX_DEGRADED_PERCENT}
+    ** percent. Messages are fixed text; no AWS message, id or hostname is
+    ** copied. Never throws.
+    *******************************************************************************/
+   @Override
+   public CdnHealth checkHealth(CdnProviderConfig config)
+   {
+      String headerName = config.settings().getOrDefault(SETTING_ORIGIN_VERIFY_HEADER, DEFAULT_ORIGIN_VERIFY_HEADER);
+      String distributionId;
+      try
+      {
+         distributionId = distributionId(config);
+      }
+      catch(CdnException e)
+      {
+         return new CdnHealth(CdnHealth.State.DOWN, "CloudFront distribution id is not configured", null);
+      }
+
+      Map<String, Object> details = new LinkedHashMap<>();
+      CloudFrontConfigSnapshot snapshot;
+      String status = null;
+      try(CloudFrontClient client = clientFactory.cloudFront(config))
+      {
+         try
+         {
+            Distribution distribution = client.getDistribution(GetDistributionRequest.builder().id(distributionId).build()).distribution();
+            status = distribution.status();
+            snapshot = CloudFrontConfigSnapshot.from(distribution.distributionConfig());
+         }
+         catch(AwsServiceException e)
+         {
+            if(!isAccessDenied(e))
+            {
+               return apiFailure(e);
+            }
+            details.put("testable", false);
+            try
+            {
+               snapshot = CloudFrontConfigSnapshot.from(client.getDistributionConfig(GetDistributionConfigRequest.builder().id(distributionId).build()).distributionConfig());
+               details.put("reason", "credentials lack cloudfront:GetDistribution");
+            }
+            catch(AwsServiceException e2)
+            {
+               if(!isAccessDenied(e2))
+               {
+                  return apiFailure(e2);
+               }
+               details.put("reason", "credentials lack cloudfront:GetDistribution and cloudfront:GetDistributionConfig");
+               return new CdnHealth(CdnHealth.State.UP, NOT_TESTABLE_MESSAGE, details);
+            }
+         }
+      }
+      catch(CdnException e)
+      {
+         return new CdnHealth(CdnHealth.State.DOWN, "CloudFront credentials are not configured", null);
+      }
+      catch(SdkClientException e)
+      {
+         return new CdnHealth(CdnHealth.State.DEGRADED, "CloudFront API unreachable; distribution status not checked", Map.of("transient", true));
+      }
+      catch(SdkException e)
+      {
+         return new CdnHealth(CdnHealth.State.DOWN, "CloudFront status check failed", null);
+      }
+
+      boolean statusTestable = !details.containsKey("testable");
+      boolean headerConfigured = snapshot.hasOriginHeader(headerName);
+      details.put("enabled", snapshot.enabled());
+      details.put("status", STATUS_DEPLOYED.equals(status) || STATUS_IN_PROGRESS.equals(status) ? status : "UNKNOWN");
+      details.put("originHeaderConfigured", headerConfigured);
+      if(!snapshot.enabled())
+      {
+         return new CdnHealth(CdnHealth.State.DOWN, "CloudFront distribution is disabled", details);
+      }
+
+      Double errorRate = errorRate5xx(config, distributionId);
+      details.put("errorRateWindowMinutes", ERROR_RATE_WINDOW_MINUTES);
+      if(errorRate != null)
+      {
+         details.put("errorRate5xxPercent", Math.round(errorRate * 100.0) / 100.0);
+      }
+
+      if(STATUS_IN_PROGRESS.equals(status))
+      {
+         return new CdnHealth(CdnHealth.State.DEGRADED, "CloudFront distribution is deploying a change (InProgress)", details);
+      }
+      if(!headerConfigured)
+      {
+         return new CdnHealth(CdnHealth.State.DEGRADED, "CDN origin header is not configured", details);
+      }
+      if(errorRate != null && errorRate > ERROR_RATE_5XX_DEGRADED_PERCENT)
+      {
+         return new CdnHealth(CdnHealth.State.DEGRADED, "CloudFront 5xx error rate is above 5% over the last 30 minutes", details);
+      }
+      if(!statusTestable)
+      {
+         return new CdnHealth(CdnHealth.State.UP, NOT_TESTABLE_MESSAGE, details);
+      }
+      return new CdnHealth(CdnHealth.State.UP, "CloudFront distribution is enabled and deployed", details);
+   }
+
+
+
+   /*******************************************************************************
+    ** Whether an AWS error is a permissions refusal.
+    *******************************************************************************/
+   private static boolean isAccessDenied(AwsServiceException e)
+   {
+      String code = e.awsErrorDetails() == null ? null : e.awsErrorDetails().errorCode();
+      return "AccessDenied".equals(code) || "AccessDeniedException".equals(code) || (code == null && e.statusCode() == 403);
+   }
+
+
+
+   /*******************************************************************************
+    ** Health for an AWS error other than AccessDenied: a missing distribution is
+    ** DOWN, throttling and AWS-side errors are DEGRADED (transient), anything
+    ** else (rejected credentials, bad id) is DOWN.
+    *******************************************************************************/
+   private static CdnHealth apiFailure(AwsServiceException e)
+   {
+      String code = e.awsErrorDetails() == null ? null : e.awsErrorDetails().errorCode();
+      if("NoSuchDistribution".equals(code))
+      {
+         return new CdnHealth(CdnHealth.State.DOWN, "CloudFront distribution not found", null);
+      }
+      if(toCdnException("GetDistribution", e).isRetryable())
+      {
+         return new CdnHealth(CdnHealth.State.DEGRADED, "CloudFront API throttled or unavailable; distribution status not checked", Map.of("transient", true));
+      }
+      return new CdnHealth(CdnHealth.State.DOWN, "CloudFront rejected the status check", null);
+   }
+
+
+
+   /*******************************************************************************
+    ** Average CloudWatch 5xxErrorRate (percent) over the health window, or null
+    ** when there is no traffic or the metric cannot be read. Best effort: it
+    ** never fails the health check.
+    *******************************************************************************/
+   private Double errorRate5xx(CdnProviderConfig config, String distributionId)
+   {
+      Instant end = Instant.now();
+      try(CloudWatchClient client = clientFactory.cloudWatch(config))
+      {
+         GetMetricDataResponse response = client.getMetricData(GetMetricDataRequest.builder()
+            .metricDataQueries(query("err5xx", "5xxErrorRate", "Average", distributionId, ERROR_RATE_PERIOD_SECONDS))
+            .startTime(end.minusSeconds(ERROR_RATE_WINDOW_MINUTES * 60L))
+            .endTime(end)
+            .build());
+         OptionalDouble average = response.metricDataResults().stream()
+            .flatMap(result -> result.values().stream())
+            .mapToDouble(Double::doubleValue)
+            .average();
+         return average.isPresent() ? average.getAsDouble() : null;
+      }
+      catch(CdnException | SdkException e)
+      {
+         return null;
+      }
+   }
+
+
+
+   /*******************************************************************************
     ** The distribution config facts used for drift checks (GetDistributionConfig).
     *******************************************************************************/
    public CloudFrontConfigSnapshot readConfig(CdnProviderConfig config) throws CdnException
@@ -369,6 +566,16 @@ public class CloudFrontCdnProvider implements CdnProviderInterface, com.kingsroo
     *******************************************************************************/
    private static MetricDataQuery query(String id, String metricName, String stat, String distributionId)
    {
+      return query(id, metricName, stat, distributionId, SECONDS_PER_DAY);
+   }
+
+
+
+   /*******************************************************************************
+    ** One CloudFront metric query with the given period (seconds).
+    *******************************************************************************/
+   private static MetricDataQuery query(String id, String metricName, String stat, String distributionId, int periodSeconds)
+   {
       Metric metric = Metric.builder()
          .namespace("AWS/CloudFront")
          .metricName(metricName)
@@ -377,7 +584,7 @@ public class CloudFrontCdnProvider implements CdnProviderInterface, com.kingsroo
          .build();
       return MetricDataQuery.builder()
          .id(id)
-         .metricStat(MetricStat.builder().metric(metric).period(SECONDS_PER_DAY).stat(stat).build())
+         .metricStat(MetricStat.builder().metric(metric).period(periodSeconds).stat(stat).build())
          .returnData(true)
          .build();
    }

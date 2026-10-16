@@ -106,7 +106,36 @@
    </dependencies>
 
    <build>
+      <resources>
+         <!-- help bundles carry the artifact version (QQQ help bundle provenance) -->
+         <resource>
+            <directory>src/main/resources</directory>
+            <filtering>true</filtering>
+            <includes>
+               <include>help/*.yaml</include>
+               <include>qbit-cdn.properties</include>
+            </includes>
+         </resource>
+         <resource>
+            <directory>src/main/resources</directory>
+            <filtering>false</filtering>
+            <excludes>
+               <exclude>help/*.yaml</exclude>
+               <exclude>qbit-cdn.properties</exclude>
+            </excludes>
+         </resource>
+      </resources>
       <plugins>
+         <!-- the artifact version, for the help bundle version test -->
+         <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-surefire-plugin</artifactId>
+            <configuration>
+               <systemPropertyVariables combine.children="append">
+                  <qbit.artifactVersion>${project.version}</qbit.artifactVersion>
+               </systemPropertyVariables>
+            </configuration>
+         </plugin>
          <plugin>
             <groupId>org.apache.maven.plugins</groupId>
             <artifactId>maven-checkstyle-plugin</artifactId>

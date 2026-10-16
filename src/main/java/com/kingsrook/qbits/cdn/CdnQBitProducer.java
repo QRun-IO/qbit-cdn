@@ -17,8 +17,11 @@
 package com.kingsrook.qbits.cdn;
 
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Properties;
 import com.kingsrook.qbits.cdn.app.CdnWidgets;
 import com.kingsrook.qbits.cdn.health.CdnProviderHealthChecks;
 import com.kingsrook.qbits.cdn.model.CdnTables;
@@ -48,10 +51,38 @@ public class CdnQBitProducer implements QBitMetaDataProducer<CdnQBitConfig>
 {
    public static final String GROUP_ID    = "com.kingsrook.qbits";
    public static final String ARTIFACT_ID = "qbit-cdn";
-   public static final String VERSION     = "0.1.0";
+   public static final String VERSION     = loadVersion();
 
    private CdnQBitConfig qBitConfig;
    private String        namespace;
+
+
+
+   /*******************************************************************************
+    ** Read the artifact version from the Maven-filtered resource.
+    *******************************************************************************/
+   private static String loadVersion()
+   {
+      try(InputStream inputStream = CdnQBitProducer.class.getClassLoader().getResourceAsStream("qbit-cdn.properties"))
+      {
+         if(inputStream == null)
+         {
+            throw (new IllegalStateException("Missing qbit-cdn.properties; cannot determine the CDN qbit artifact version."));
+         }
+         Properties properties = new Properties();
+         properties.load(inputStream);
+         String version = properties.getProperty("version");
+         if(version == null || version.isBlank() || version.contains("${"))
+         {
+            throw (new IllegalStateException("Missing or unfiltered version in qbit-cdn.properties; build with Maven resource filtering."));
+         }
+         return (version);
+      }
+      catch(IOException e)
+      {
+         throw (new IllegalStateException("Could not read the CDN qbit artifact version from qbit-cdn.properties.", e));
+      }
+   }
 
 
 

@@ -35,6 +35,18 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class CdnQBitProducerTest
 {
    /*******************************************************************************
+    ** Metadata must report the version of the artifact being built.
+    *******************************************************************************/
+   @Test
+   void metadataVersionMatchesArtifact()
+   {
+      assertThat(System.getProperty("qbit.artifactVersion")).isNotBlank().isEqualTo(CdnQBitProducer.VERSION);
+      assertThat(new CdnQBitProducer().getQBitMetaData().getVersion()).isEqualTo(System.getProperty("qbit.artifactVersion"));
+   }
+
+
+
+   /*******************************************************************************
     ** Everything is produced and the instance is valid.
     *******************************************************************************/
    @Test
